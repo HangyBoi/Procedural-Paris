@@ -156,7 +156,7 @@ MonoBehaviour:
   OutputMaterial: {fileID: 2100000, guid: 5655ca3729e87574c952099b96dea59e, type: 2}
   DefaultPreset: " <sbspreset pkgurl=\"pkg://Rooftop\" label=\"\" >\n  <presetinput
     identifier=\"$outputsize\" uid=\"82324617\" type=\"8\" value=\"10,10\" />\n </sbspreset>\n"
-  MaterialShader: HDRP/LitTessellation
+  MaterialShader: HDRP/Lit
   RenderTextures: 0
   OutputRemaped: 0
   Presets: []
