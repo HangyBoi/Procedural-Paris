@@ -164,7 +164,7 @@ MonoBehaviour:
   GenerateAllMipmaps: 1
   OutputMaterial: {fileID: 2100000, guid: a47c229eb2d27444d8edac7a386a35f6, type: 2}
   DefaultPreset: " <sbspreset pkgurl=\"pkg://Ground\" label=\"\" >\n </sbspreset>\n"
-  MaterialShader: HDRP/LitTessellation
+  MaterialShader: HDRP/Lit
   RenderTextures: 0
   OutputRemaped: 0
   Presets: []
