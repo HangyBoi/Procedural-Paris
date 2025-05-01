@@ -148,7 +148,6 @@ MonoBehaviour:
     />\n  <presetinput identifier=\"$randomseed\" uid=\"1641403350\" type=\"4\" value=\"6535\"
     />\n  <presetinput identifier=\"opacitymult\" uid=\"1474750033\" type=\"0\" value=\"0.724\"
     />\n  <presetinput identifier=\"y_amount\" uid=\"1474745740\" type=\"4\" value=\"8\"
-    />\n  <presetinput identifier=\"switch_1\" uid=\"1474813322\" type=\"4\" value=\"0\"
     />\n </sbspreset>\n"
   IsRuntimeOnly: 0
   GenerateAllOutputs: 0
@@ -281,7 +280,7 @@ MonoBehaviour:
           GuiDescription: Activates or Disables the Arch Element on top of the door
           Type: 4
           WidgetType: 4
-        Data: 0
+        Data: 1
         NumericalDescription:
           DefaultValue: 1
           MinValue: 0

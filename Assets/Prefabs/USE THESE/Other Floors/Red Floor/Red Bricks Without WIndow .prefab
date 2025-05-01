@@ -120,15 +120,20 @@ PrefabInstance:
       propertyPath: m_Name
       value: FloorDevider
       objectReference: {fileID: 0}
+    - target: {fileID: 4933440606781067872, guid: 2b42921af0f6a70418832a27ca79b8b7,
+        type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: 79614bd21f5835b42ba16e68e0d1f386, type: 2}
     - target: {fileID: 8459115626171072787, guid: 2b42921af0f6a70418832a27ca79b8b7,
         type: 3}
       propertyPath: m_LocalPosition.x
-      value: -0.0017552674
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8459115626171072787, guid: 2b42921af0f6a70418832a27ca79b8b7,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: -0.37929046
+      value: 0.4
       objectReference: {fileID: 0}
     - target: {fileID: 8459115626171072787, guid: 2b42921af0f6a70418832a27ca79b8b7,
         type: 3}
