@@ -90,6 +90,10 @@ public class WFCBuildingGenerator : MonoBehaviour
         int placementAttempts = 0; // Attempts for the current segment
         int totalSegmentsPlaced = 0; // Total segments placed so far
 
+        // --- Define constants related to the specific corner geometry ---
+        // Ensure this 'L' matches the actual length/width of your segments
+        const float L = 0.8f;
+
         while (totalSegmentsPlaced < targetSegments && totalSegmentsPlaced < absoluteMaxSegments)
         {
             if (placementAttempts >= maxPlacementAttempts)
@@ -107,60 +111,105 @@ public class WFCBuildingGenerator : MonoBehaviour
             }
 
             // --- Closure Check ---
-            // Only attempt closure if we've placed the minimum required segments
-            // and we are reasonably close to the start position.
-            bool shouldAttemptClosure = (totalSegmentsPlaced >= minSegments - 1) && // -1 because we're placing the *next* segment
-                                       Vector3.Distance(currentPosition, startPosition) < closureDistanceThreshold * 2.0f; // Be generous with check distance
+            bool shouldAttemptClosure = (totalSegmentsPlaced >= minSegments - 1) &&
+                                       Vector3.Distance(currentPosition, startPosition) < closureDistanceThreshold * 2.0f;
 
             WFCModule chosenModule = null;
 
             if (shouldAttemptClosure)
             {
+                // Pass the *current* state to TryFindClosingModule, as it needs to simulate placement
                 chosenModule = TryFindClosingModule(possibleModules);
-                // If a closing module is found, we will place it and potentially finish.
             }
 
             // --- If not attempting closure, or closure failed, select normally ---
             if (chosenModule == null)
             {
                 chosenModule = SelectRandomWeightedModule(possibleModules);
-                if (chosenModule == null) // Should not happen if possibleModules > 0
+                if (chosenModule == null)
                 {
                     Debug.LogError($"SelectRandomWeightedModule returned null despite having options. Check weights/logic.");
                     placementAttempts++;
-                    continue; // Try again on the next loop iteration
+                    continue;
                 }
             }
 
-            // --- Place the chosen module (logically) ---
+            // --- MODULE PLACEMENT AND STATE UPDATE ---
+
+            // 1. Store the position/rotation *where this module will be placed*
+            Vector3 placedPosition = currentPosition;
+            Quaternion placedRotation = currentRotation;
+
+            // 2. Calculate the state (position, rotation) for the START of the *next* segment
+            Vector3 nextPosition;
+            Quaternion nextRotation = placedRotation * Quaternion.Euler(0, chosenModule.placementRotationY, 0); // Rotation is always applied
+
+            // Check if the module we just chose requires special offset handling
+            if (chosenModule.isSpecial45DegreeCorner)
+            {
+                // Use the derived trigonometric offset for the special 45-degree corner
+                float angleY = chosenModule.placementRotationY; // Get the specific rotation angle (e.g., 45)
+
+                // Calculate the special offset vector *in the local space of the placed corner module*
+                // This vector points from the corner's pivot to where the *next* module's pivot should be.
+                Vector3 localOffset = (Vector3.left * (L / 2.0f))
+                                    + (Quaternion.Euler(0, angleY, 0) * Vector3.left * (1.5f * L));
+
+                // Convert the local offset to a world-space offset using the corner's placement rotation
+                // and add it to the corner's placement position to find the next module's position.
+                nextPosition = placedPosition + (placedRotation * localOffset);
+
+                // --- Optional Debug Visualization ---
+#if UNITY_EDITOR // Only run this code in the Unity Editor
+                // Draw a line showing the calculated offset for debugging
+                Debug.DrawLine(placedPosition, nextPosition, Color.cyan, 10f);
+                // Draw the corner's forward direction
+                Debug.DrawRay(placedPosition, placedRotation * Vector3.forward, Color.blue, 10f);
+                // Draw the corner's left direction (the axis the offset is initially based on)
+                Debug.DrawRay(placedPosition, placedRotation * Vector3.left, Color.red, 10f);
+                // Draw the direction the *next* module will face
+                Debug.DrawRay(nextPosition, nextRotation * Vector3.forward, Color.green, 10f);
+#endif
+            }
+            else // Assume it's a standard module (like a straight piece)
+            {
+                // Use the simple segmentLength logic: move along the current 'left' direction
+                // Ensure the straight module's 'segmentLength' field is set correctly (e.g., to L = 0.8)
+                nextPosition = placedPosition + (placedRotation * Vector3.left * chosenModule.segmentLength);
+
+                // --- Optional Debug Visualization ---
+#if UNITY_EDITOR
+                Debug.DrawLine(placedPosition, nextPosition, Color.yellow, 10f);
+                Debug.DrawRay(placedPosition, placedRotation * Vector3.forward, Color.blue, 10f);
+                Debug.DrawRay(nextPosition, nextRotation * Vector3.forward, Color.green, 10f);
+#endif
+            }
+
+            // 3. Record the module that was just placed, using its placement position/rotation
             int chosenHeight = Random.Range(minHeight, maxHeight + 1);
             placedModules.Add(new PlacedModuleInfo
             {
                 module = chosenModule,
-                position = currentPosition,
-                rotation = currentRotation,
+                position = placedPosition, // Use the position where it was placed
+                rotation = placedRotation, // Use the rotation it was placed with
                 height = chosenHeight
             });
             totalSegmentsPlaced++;
 
-            // --- Update state for the NEXT segment ---
-            // 1. Move forward by the chosen segment's defined length
-            currentPosition += currentRotation * Vector3.left * chosenModule.segmentLength;
-            // 2. Apply the rotation defined by the chosen module
-            currentRotation *= Quaternion.Euler(0, chosenModule.placementRotationY, 0);
-            // 3. Set the socket requirement for the next module
-            requiredInputSocket = chosenModule.outputSocket;
+            // 4. Update the generator's state to the calculated position/rotation for the NEXT segment
+            currentPosition = nextPosition;
+            currentRotation = nextRotation;
+            requiredInputSocket = chosenModule.outputSocket; // Set the requirement for the next module
 
 
-            // --- Check if the loop is now closed (Post-Placement Check) ---
-            // This check happens *after* updating position/rotation based on the module just placed.
-            if (chosenModule != null && IsLoopClosed()) // Pass the chosen module for context if needed later
+            // --- Check if the loop is now closed (using the updated state) ---
+            if (IsLoopClosed()) // Checks if the 'currentPosition/Rotation' meets closure criteria
             {
                 Debug.Log($"Loop closed successfully after {totalSegmentsPlaced} segments.");
                 return; // Finished footprint generation
             }
 
-            // Reset placement attempt counter for the next successful segment
+            // Reset placement attempt counter for the next segment
             placementAttempts = 0;
 
         } // End of while loop
@@ -175,8 +224,8 @@ public class WFCBuildingGenerator : MonoBehaviour
             Debug.LogWarning($"Generation stopped early ({totalSegmentsPlaced} segments) before reaching minimum ({minSegments}). Check for compatibility issues.");
         }
         else if (!IsLoopClosed())
-        { // Check final state
-            Debug.LogWarning($"Finished placing {totalSegmentsPlaced} segments without closing the loop successfully. Distance to start: {Vector3.Distance(currentPosition, startPosition):F2}m");
+        {
+            Debug.LogWarning($"Finished placing {totalSegmentsPlaced} segments without closing the loop. Distance to start: {Vector3.Distance(currentPosition, startPosition):F2}m");
         }
     }
 
@@ -229,41 +278,52 @@ public class WFCBuildingGenerator : MonoBehaviour
         return modules.LastOrDefault(); // Fallback
     }
 
+    // REMEMBER: Also modify TryFindClosingModule if needed, as it simulates placement
+    // It needs to perform the *same* conditional logic (special corner vs normal)
+    // when calculating the 'nextPos' and 'nextRot' during its simulation.
+
+    // Updated TryFindClosingModule - Example (Needs integration)
     WFCModule TryFindClosingModule(List<WFCModule> possibleModules)
     {
-        // Find modules that, if placed, would bring the 'currentPosition' very close to 'startPosition'
-        // AND whose output socket is compatible with the very first module's requirement (Straight).
-
         float bestDist = float.MaxValue;
         WFCModule bestModule = null;
+        const float L = 0.8f; // Make sure L is defined/accessible here too
+
+        // Current state where the potential closing module would be placed
+        Vector3 placementPos = currentPosition;
+        Quaternion placementRot = currentRotation;
 
         foreach (var module in possibleModules)
         {
-            // Simulate placement:
-            Vector3 nextPos = currentPosition + currentRotation * Vector3.left * module.segmentLength;
-            Quaternion nextRot = currentRotation * Quaternion.Euler(0, module.placementRotationY, 0); // Rotation AFTER placement
+            // --- Simulate placement to find the position/rotation AFTER this module ---
+            Vector3 simulatedNextPos;
+            Quaternion simulatedNextRot = placementRot * Quaternion.Euler(0, module.placementRotationY, 0);
 
-            float distToStart = Vector3.Distance(nextPos, startPosition);
-
-            // Check 1: Is the resulting position close enough?
-            if (distToStart < closureDistanceThreshold) // Use the main threshold here
+            if (module.isSpecial45DegreeCorner)
             {
-                // Check 2: Is the output socket of this module compatible with the START requirement?
-                // The start always requires a module with 'Straight' input, so the closing module
-                // must have an output socket that 'CanConnect' TO a 'Straight' input.
-                // Effectively, this module's output must allow a Straight module to follow it.
-                bool compatibleWithStart = CanConnect(module.outputSocket, SocketType.Straight); // Check if this module's output works with the start requirement
+                float angleY = module.placementRotationY;
+                Vector3 localOffset = (Vector3.left * (L / 2.0f)) + (Quaternion.Euler(0, angleY, 0) * Vector3.left * (1.5f * L));
+                simulatedNextPos = placementPos + (placementRot * localOffset);
+            }
+            else // Normal module
+            {
+                simulatedNextPos = placementPos + (placementRot * Vector3.left * module.segmentLength);
+            }
+            // --- End Simulation ---
+
+
+            float distToStart = Vector3.Distance(simulatedNextPos, startPosition);
+
+            // Check 1: Is the simulated resulting position close enough?
+            if (distToStart < closureDistanceThreshold)
+            {
+                // Check 2: Is the output socket compatible with the start requirement?
+                bool compatibleWithStart = CanConnect(module.outputSocket, SocketType.Straight);
 
                 if (compatibleWithStart)
                 {
-                    // Optional Check 3: Angle - Does the orientation after placing this module
-                    // roughly point back towards the start? (Less critical with flexible connections)
-                    // Vector3 directionToStart = (startPosition - nextPos).normalized;
-                    // Vector3 finalForward = nextRot * Vector3.forward;
-                    // float angleDiff = Vector3.Angle(finalForward, directionToStart);
-                    // if (angleDiff < closureAngleThreshold) { ... }
+                    // Optional: Check Angle (using simulatedNextRot and simulatedNextPos) if desired
 
-                    // If multiple modules could close, prefer the one ending closest.
                     if (distToStart < bestDist)
                     {
                         bestDist = distToStart;
@@ -275,7 +335,7 @@ public class WFCBuildingGenerator : MonoBehaviour
 
         if (bestModule != null)
         {
-            // Debug.Log($"Found potential closing module: {bestModule.moduleName}. Ends {bestDist:F2}m from start.");
+            Debug.Log($"Found potential closing module: {bestModule.moduleName}. Simulated end distance: {bestDist:F2}m.");
         }
 
         return bestModule; // Return the best closing module found, or null

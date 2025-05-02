@@ -32,6 +32,10 @@ public class WFCModule : ScriptableObject
     public SocketType outputSocket;
 
     [Header("Geometry (Read Tooltips!)")]
+    [Tooltip("Is this the special 3-segment, 45-degree corner requiring specific offset calculation?")]
+    public bool isSpecial45DegreeCorner = false; // Set this to TRUE only for this specific corner module asset
+
+    [Header("Geometry (Read Tooltips!)")]
     [Tooltip("Effective forward distance covered by this segment *before* any rotation is applied for the next segment. " +
              "For a Straight wall (0.8m), this is 0.8. " +
              "For the Corner prefab, this should represent the equivalent forward space it occupies along the current direction. " +
