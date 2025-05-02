@@ -21,8 +21,9 @@ MonoBehaviour:
   - {fileID: 6014068919633220513, guid: 5fd9a0030c4cf2b4bb94f561f4c928a2, type: 3}
   - {fileID: 3501604703497272480, guid: 6b140ded6c912684597e395670cb55fe, type: 3}
   mansardFloorPrefabs:
-  - {fileID: 1050970514875007200, guid: a008a730605ad8540825dec5d28487ee, type: 3}
-  atticRoofPrefab: {fileID: 8559396143504780198, guid: 979b7f3008fcff843bb5a78a6b225c0a,
+  - {fileID: 4794097862798657804, guid: a008a730605ad8540825dec5d28487ee, type: 3}
+  - {fileID: 334451473432999500, guid: 1132c5aa579582445b83fb2c813cd28f, type: 3}
+  atticRoofPrefab: {fileID: 2936507998635124413, guid: 979b7f3008fcff843bb5a78a6b225c0a,
     type: 3}
   inputSocket: 0
   outputSocket: 1

@@ -240,7 +240,7 @@ public class WFCBuildingGenerator : MonoBehaviour
         foreach (var module in possibleModules)
         {
             // Simulate placement:
-            Vector3 nextPos = currentPosition + currentRotation * Vector3.forward * module.segmentLength;
+            Vector3 nextPos = currentPosition + currentRotation * Vector3.left * module.segmentLength;
             Quaternion nextRot = currentRotation * Quaternion.Euler(0, module.placementRotationY, 0); // Rotation AFTER placement
 
             float distToStart = Vector3.Distance(nextPos, startPosition);
