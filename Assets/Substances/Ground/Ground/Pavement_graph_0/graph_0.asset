@@ -152,14 +152,15 @@ MonoBehaviour:
   CurrentStatePreset: " <sbspreset pkgurl=\"pkg://Ground\" label=\"\" >\n  <presetinput
     identifier=\"$outputsize\" uid=\"2527831057\" type=\"8\" value=\"10,10\" />\n 
     <presetinput identifier=\"$randomseed\" uid=\"3252269635\" type=\"4\" value=\"5631\"
-    />\n  <presetinput identifier=\"Pavement_X_Tile\" uid=\"4156959178\" type=\"4\"
-    value=\"58\" />\n  <presetinput identifier=\"Pavement_Y_Tile\" uid=\"4156957526\"
-    type=\"4\" value=\"58\" />\n  <presetinput identifier=\"x_amount_Cracks\" uid=\"4157681227\"
-    type=\"4\" value=\"10\" />\n  <presetinput identifier=\"y_amount\" uid=\"4157691301\"
-    type=\"4\" value=\"10\" />\n  <presetinput identifier=\"x_amount\" uid=\"4157727983\"
-    type=\"4\" value=\"10\" />\n  <presetinput identifier=\"y_amount_1\" uid=\"4157742713\"
-    type=\"4\" value=\"10\" />\n  <presetinput identifier=\"x_amount_1\" uid=\"4157745708\"
-    type=\"4\" value=\"10\" />\n  <presetinput identifier=\"y_amount_2\" uid=\"4157759331\"
+    />\n  <presetinput identifier=\"Pavement_Level\" uid=\"4156862715\" type=\"0\"
+    value=\"0\" />\n  <presetinput identifier=\"Pavement_X_Tile\" uid=\"4156959178\"
+    type=\"4\" value=\"61\" />\n  <presetinput identifier=\"Pavement_Y_Tile\" uid=\"4156957526\"
+    type=\"4\" value=\"64\" />\n  <presetinput identifier=\"x_amount_Cracks\" uid=\"4157681227\"
+    type=\"4\" value=\"1\" />\n  <presetinput identifier=\"y_amount\" uid=\"4157691301\"
+    type=\"4\" value=\"64\" />\n  <presetinput identifier=\"x_amount\" uid=\"4157727983\"
+    type=\"4\" value=\"1\" />\n  <presetinput identifier=\"y_amount_1\" uid=\"4157742713\"
+    type=\"4\" value=\"1\" />\n  <presetinput identifier=\"x_amount_1\" uid=\"4157745708\"
+    type=\"4\" value=\"1\" />\n  <presetinput identifier=\"y_amount_2\" uid=\"4157759331\"
     type=\"4\" value=\"10\" />\n </sbspreset>\n"
   IsRuntimeOnly: 0
   GenerateAllOutputs: 0
@@ -245,7 +246,7 @@ MonoBehaviour:
           GuiDescription: 
           Type: 0
           WidgetType: 1
-        Data: 1
+        Data: 0
         NumericalDescription:
           DefaultValue: 1
           MinValue: 0
@@ -265,7 +266,7 @@ MonoBehaviour:
           GuiDescription: 
           Type: 4
           WidgetType: 1
-        Data: 58
+        Data: 61
         NumericalDescription:
           DefaultValue: 10
           MinValue: 1
@@ -287,7 +288,7 @@ MonoBehaviour:
           GuiDescription: 
           Type: 4
           WidgetType: 1
-        Data: 58
+        Data: 64
         NumericalDescription:
           DefaultValue: 10
           MinValue: 1
@@ -309,7 +310,7 @@ MonoBehaviour:
           GuiDescription: Amount of patterns on the X axis.
           Type: 4
           WidgetType: 1
-        Data: 10
+        Data: 1
         NumericalDescription:
           DefaultValue: 100
           MinValue: 1
@@ -331,7 +332,7 @@ MonoBehaviour:
           GuiDescription: Amount of patterns on the Y axis.
           Type: 4
           WidgetType: 1
-        Data: 10
+        Data: 64
         NumericalDescription:
           DefaultValue: 100
           MinValue: 1
@@ -353,7 +354,7 @@ MonoBehaviour:
           GuiDescription: Amount of patterns on the X axis.
           Type: 4
           WidgetType: 1
-        Data: 10
+        Data: 1
         NumericalDescription:
           DefaultValue: 100
           MinValue: 1
@@ -375,7 +376,7 @@ MonoBehaviour:
           GuiDescription: Amount of patterns on the Y axis.
           Type: 4
           WidgetType: 1
-        Data: 10
+        Data: 1
         NumericalDescription:
           DefaultValue: 100
           MinValue: 1
@@ -397,7 +398,7 @@ MonoBehaviour:
           GuiDescription: Amount of patterns on the X axis.
           Type: 4
           WidgetType: 1
-        Data: 10
+        Data: 1
         NumericalDescription:
           DefaultValue: 100
           MinValue: 1
