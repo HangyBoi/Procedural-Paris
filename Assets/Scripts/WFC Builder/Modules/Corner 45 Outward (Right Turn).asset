@@ -13,16 +13,16 @@ MonoBehaviour:
   m_Name: Corner 45 Outward (Right Turn)
   m_EditorClassIdentifier: 
   moduleName: Corner 45 Outward (Right Turn)
-  groundFloorPrefab: {fileID: 173185195735881845, guid: d46c16585597d684281e15b53b280558,
+  groundFloorPrefab: {fileID: 5099587386302333999, guid: 11d24540471034e489b3bf6d99370206,
     type: 3}
   middleFloorPrefabs:
-  - {fileID: 4227314501307415981, guid: e2be06993941f4f4aa005400f37dd848, type: 3}
-  - {fileID: 7450968040575426805, guid: 570c640ce3a616c43badb7dd8cc91c26, type: 3}
-  mansardFloorPrefab: {fileID: 986427947973918999, guid: 08e226c3209d858469ac6fc76d4c4c22,
-    type: 3}
+  - {fileID: 5099587386302333999, guid: 52853678a883a264e8bbcf44fc031a84, type: 3}
+  - {fileID: 5099587386302333999, guid: e2ae5e597895b4e4f9f0e3030d656b1f, type: 3}
+  - {fileID: 5099587386302333999, guid: 451288eb2a9739746b3cd1773b478164, type: 3}
+  mansardFloorPrefab: {fileID: 0}
   atticRoofPrefab: {fileID: 0}
   inputSocket: 0
   outputSocket: 1
-  segmentLength: 3
-  placementRotationY: 45
+  segmentLength: 1
+  placementRotationY: 0
   probabilityWeight: 1

@@ -13,16 +13,15 @@ MonoBehaviour:
   m_Name: Straight Wall
   m_EditorClassIdentifier: 
   moduleName: Straight Wall
-  groundFloorPrefab: {fileID: 8762195699805196988, guid: 95be4d6b271e5864f9aae86ba6b00463,
+  groundFloorPrefab: {fileID: 3435898480930570988, guid: 26b6b37f1cd453f498ad414b0f3473d7,
     type: 3}
   middleFloorPrefabs:
-  - {fileID: 2756884279308664921, guid: bc6a1236298af034583bcf88ab9b1083, type: 3}
-  - {fileID: 1493519986560543511, guid: 02ecbe1c8047a354eac44b311e35a0f0, type: 3}
-  mansardFloorPrefab: {fileID: 9056008403127592490, guid: 1132c5aa579582445b83fb2c813cd28f,
-    type: 3}
+  - {fileID: 6014068919633220513, guid: 5fd9a0030c4cf2b4bb94f561f4c928a2, type: 3}
+  - {fileID: 3501604703497272480, guid: 6b140ded6c912684597e395670cb55fe, type: 3}
+  mansardFloorPrefab: {fileID: 0}
   atticRoofPrefab: {fileID: 0}
   inputSocket: 0
   outputSocket: 0
   segmentLength: 1
-  placementRotationY: 90
+  placementRotationY: 0
   probabilityWeight: 1
