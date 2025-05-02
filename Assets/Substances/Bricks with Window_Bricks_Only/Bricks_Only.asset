@@ -152,6 +152,7 @@ MonoBehaviour:
     />\n  <presetinput identifier=\"opacitymult\" uid=\"910614487\" type=\"0\" value=\"0.53\"
     />\n  <presetinput identifier=\"height_position\" uid=\"910800032\" type=\"0\"
     value=\"7.1\" />\n  <presetinput identifier=\"switch\" uid=\"910563753\" type=\"4\"
+    value=\"0\" />\n  <presetinput identifier=\"switch_1\" uid=\"910751749\" type=\"4\"
     value=\"0\" />\n </sbspreset>\n"
   IsRuntimeOnly: 0
   GenerateAllOutputs: 0
@@ -351,7 +352,7 @@ MonoBehaviour:
             input.
           Type: 4
           WidgetType: 4
-        Data: 1
+        Data: 0
         NumericalDescription:
           DefaultValue: 1
           MinValue: 0

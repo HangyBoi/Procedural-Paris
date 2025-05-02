@@ -149,6 +149,7 @@ MonoBehaviour:
   CurrentStatePreset: " <sbspreset pkgurl=\"pkg://Actual_Horisontal_Bricks\" label=\"\"
     >\n  <presetinput identifier=\"$outputsize\" uid=\"916964740\" type=\"8\" value=\"10,10\"
     />\n  <presetinput identifier=\"opacitymult\" uid=\"1474750033\" type=\"0\" value=\"0.462\"
+    />\n  <presetinput identifier=\"y_amount\" uid=\"1474745740\" type=\"4\" value=\"8\"
     />\n  <presetinput identifier=\"Detail_Switch\" uid=\"1475080265\" type=\"4\"
     value=\"0\" />\n  <presetinput identifier=\"Mask_Switch\" uid=\"1475081183\"
     type=\"4\" value=\"0\" />\n  <presetinput identifier=\"Color_Switch\" uid=\"1475080042\"
@@ -160,7 +161,7 @@ MonoBehaviour:
   DefaultPreset: " <sbspreset pkgurl=\"pkg://Actual_Horisontal_Bricks\" label=\"\"
     >\n  <presetinput identifier=\"$outputsize\" uid=\"916964740\" type=\"8\" value=\"10,10\"
     />\n </sbspreset>\n"
-  MaterialShader: HDRP/LitTessellation
+  MaterialShader: HDRP/Lit
   RenderTextures: 0
   OutputRemaped: 0
   Presets: []
@@ -262,7 +263,7 @@ MonoBehaviour:
           GuiDescription: Toggles the amount of stone carved canals.
           Type: 4
           WidgetType: 1
-        Data: 10
+        Data: 8
         NumericalDescription:
           DefaultValue: 10
           MinValue: 1
