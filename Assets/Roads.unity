@@ -760,9 +760,9 @@ MonoBehaviour:
   minSegments: 10
   maxSegments: 100
   minHeight: 3
-  maxHeight: 5
+  maxHeight: 7
   closureDistanceThreshold: 0.8
-  closureAngleThreshold: 180
+  closureAngleThreshold: 15
   maxPlacementAttempts: 100
   absoluteMaxSegments: 100
   generationParent: {fileID: 1348134604}

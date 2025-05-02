@@ -26,7 +26,7 @@ MonoBehaviour:
   atticRoofPrefab: {fileID: 5692133504600408748, guid: ee32a484f8366d24db154d8dae00e303,
     type: 3}
   inputSocket: 0
-  outputSocket: 0
+  outputSocket: 1
   isSpecial45DegreeCorner: 1
   segmentLength: 0.8
   placementRotationY: -45
