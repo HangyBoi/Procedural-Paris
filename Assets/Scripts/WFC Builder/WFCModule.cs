@@ -40,7 +40,7 @@ public class WFCModule : ScriptableObject
              "For a Straight wall (0.8m), this is 0.8. " +
              "For the Corner prefab, this should represent the equivalent forward space it occupies along the current direction. " +
              "MEASURE YOUR PREFAB: If the corner starts, effectively moves forward 0.8m, then turns 90 degrees, set this to 0.8.")]
-    public float segmentLength = 0.8f; // Defaulting to standard wall length
+    public float segmentLength = 1.0f; // Defaulting to standard wall length
 
     [Tooltip("Rotation around Y-axis applied *after* placing this segment to orient for the NEXT segment. " +
              "0 for Straight Wall. " +

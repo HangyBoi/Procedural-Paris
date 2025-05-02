@@ -92,7 +92,7 @@ public class WFCBuildingGenerator : MonoBehaviour
 
         // --- Define constants related to the specific corner geometry ---
         // Ensure this 'L' matches the actual length/width of your segments
-        const float L = 0.8f;
+        const float L = 1.0f;
 
         while (totalSegmentsPlaced < targetSegments && totalSegmentsPlaced < absoluteMaxSegments)
         {
@@ -287,7 +287,7 @@ public class WFCBuildingGenerator : MonoBehaviour
     {
         float bestDist = float.MaxValue;
         WFCModule bestModule = null;
-        const float L = 0.8f; // Make sure L is defined/accessible here too
+        const float L = 1.0f; // Make sure L is defined/accessible here too
 
         // Current state where the potential closing module would be placed
         Vector3 placementPos = currentPosition;

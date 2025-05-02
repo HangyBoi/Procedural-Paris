@@ -28,6 +28,6 @@ MonoBehaviour:
   inputSocket: 0
   outputSocket: 0
   isSpecial45DegreeCorner: 0
-  segmentLength: 0.8
+  segmentLength: 10
   placementRotationY: 0
   probabilityWeight: 1
