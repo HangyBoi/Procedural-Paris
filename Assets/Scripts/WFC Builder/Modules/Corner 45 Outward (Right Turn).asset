@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d0f52ed99c776574d94b459f9b789ac1, type: 3}
+  m_Name: Corner 45 Outward (Right Turn)
+  m_EditorClassIdentifier: 
+  moduleName: Corner 45 Outward (Right Turn)
+  groundFloorPrefab: {fileID: 173185195735881845, guid: d46c16585597d684281e15b53b280558,
+    type: 3}
+  middleFloorPrefabs:
+  - {fileID: 4227314501307415981, guid: e2be06993941f4f4aa005400f37dd848, type: 3}
+  - {fileID: 7450968040575426805, guid: 570c640ce3a616c43badb7dd8cc91c26, type: 3}
+  mansardFloorPrefab: {fileID: 986427947973918999, guid: 08e226c3209d858469ac6fc76d4c4c22,
+    type: 3}
+  atticRoofPrefab: {fileID: 0}
+  inputSocket: 0
+  outputSocket: 1
+  segmentLength: 3
+  placementRotationY: 45
+  probabilityWeight: 1

@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d0f52ed99c776574d94b459f9b789ac1, type: 3}
+  m_Name: Straight Wall
+  m_EditorClassIdentifier: 
+  moduleName: Straight Wall
+  groundFloorPrefab: {fileID: 8762195699805196988, guid: 95be4d6b271e5864f9aae86ba6b00463,
+    type: 3}
+  middleFloorPrefabs:
+  - {fileID: 2756884279308664921, guid: bc6a1236298af034583bcf88ab9b1083, type: 3}
+  - {fileID: 1493519986560543511, guid: 02ecbe1c8047a354eac44b311e35a0f0, type: 3}
+  mansardFloorPrefab: {fileID: 9056008403127592490, guid: 1132c5aa579582445b83fb2c813cd28f,
+    type: 3}
+  atticRoofPrefab: {fileID: 0}
+  inputSocket: 0
+  outputSocket: 0
+  segmentLength: 1
+  placementRotationY: 90
+  probabilityWeight: 1
