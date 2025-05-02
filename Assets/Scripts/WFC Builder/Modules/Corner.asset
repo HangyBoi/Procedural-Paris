@@ -10,19 +10,23 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d0f52ed99c776574d94b459f9b789ac1, type: 3}
-  m_Name: Corner 45 Outward (Right Turn)
+  m_Name: Corner
   m_EditorClassIdentifier: 
-  moduleName: Corner 45 Outward (Right Turn)
-  groundFloorPrefab: {fileID: 5099587386302333999, guid: 11d24540471034e489b3bf6d99370206,
-    type: 3}
+  moduleName: Corner
+  groundFloorPrefabs:
+  - {fileID: 326281387442779293, guid: 214943b3b279d28418d41bdae26316b0, type: 3}
+  - {fileID: 5099587386302333999, guid: 11d24540471034e489b3bf6d99370206, type: 3}
   middleFloorPrefabs:
   - {fileID: 5099587386302333999, guid: 52853678a883a264e8bbcf44fc031a84, type: 3}
   - {fileID: 5099587386302333999, guid: e2ae5e597895b4e4f9f0e3030d656b1f, type: 3}
   - {fileID: 5099587386302333999, guid: 451288eb2a9739746b3cd1773b478164, type: 3}
-  mansardFloorPrefab: {fileID: 0}
-  atticRoofPrefab: {fileID: 0}
+  mansardFloorPrefabs:
+  - {fileID: 1971868688450253051, guid: 9d86218572285f847a474f5ab5b7b35d, type: 3}
+  - {fileID: 986427947973918999, guid: 08e226c3209d858469ac6fc76d4c4c22, type: 3}
+  atticRoofPrefab: {fileID: 8559396143504780198, guid: 979b7f3008fcff843bb5a78a6b225c0a,
+    type: 3}
   inputSocket: 0
-  outputSocket: 1
-  segmentLength: 1
-  placementRotationY: 0
+  outputSocket: 0
+  segmentLength: 1.2
+  placementRotationY: -45
   probabilityWeight: 1
