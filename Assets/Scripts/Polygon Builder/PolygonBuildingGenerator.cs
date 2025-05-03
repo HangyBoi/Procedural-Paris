@@ -41,6 +41,7 @@ public class PolygonBuildingGenerator : MonoBehaviour
 
     [Header("Corner Elements")]
     public List<GameObject> cornerElementPrefabs;
+    public List<GameObject> cornerCapPrefabs; // Prefabs for the top of the corner stack
     // Define how high corner elements should go
     public enum CornerHeightMode { MatchShortest, MatchTallest, FullDefaultHeight }
     public CornerHeightMode cornerHeightMode = CornerHeightMode.MatchShortest;
@@ -198,54 +199,51 @@ public class PolygonBuildingGenerator : MonoBehaviour
 
     void GenerateCornerElements(int[] sideHeights)
     {
-        if (cornerElementPrefabs == null || cornerElementPrefabs.Count == 0) return; // Nothing to spawn
+        // Add check for cap prefabs too
+        if ((cornerElementPrefabs == null || cornerElementPrefabs.Count == 0) && (cornerCapPrefabs == null || cornerCapPrefabs.Count == 0))
+        {
+            Debug.LogWarning("No corner element or corner cap prefabs assigned.");
+            return;
+        }
 
         GameObject cornersParent = new GameObject(CORNERS_NAME);
         cornersParent.transform.SetParent(generatedBuildingRoot.transform, false);
 
         for (int i = 0; i < vertexData.Count; i++)
         {
-            if (!vertexData[i].addCornerElement) continue; // Skip if flag is false
+            if (!vertexData[i].addCornerElement) continue;
 
-            // Get vertex and its neighbours
             PolygonVertexData currentV = vertexData[i];
-            PolygonVertexData prevV = vertexData[(i + vertexData.Count - 1) % vertexData.Count]; // Previous vertex (handles wrap around)
-            PolygonVertexData nextV = vertexData[(i + 1) % vertexData.Count];                   // Next vertex
+            PolygonVertexData prevV = vertexData[(i + vertexData.Count - 1) % vertexData.Count];
+            PolygonVertexData nextV = vertexData[(i + 1) % vertexData.Count];
 
             Vector3 currentPos = currentV.position;
             Vector3 prevPos = prevV.position;
             Vector3 nextPos = nextV.position;
 
-            // Calculate incoming and outgoing directions at the vertex
             Vector3 dirToPrev = (prevPos - currentPos).normalized;
             Vector3 dirToNext = (nextPos - currentPos).normalized;
 
-            // Calculate the normals of the two sides meeting at this vertex
-            // Side Prev->Current
+            // --- Calculate Corner Rotation (Same as before) ---
             Vector3 sideNormalPrev = Vector3.Cross((currentPos - prevPos).normalized, Vector3.up).normalized;
-            // Side Current->Next
             Vector3 sideNormalNext = Vector3.Cross(dirToNext, Vector3.up).normalized;
+            Vector3 avgNormal = (sideNormalPrev + sideNormalNext); // Don't normalize yet
 
-            // Robust Normal Check (ensure they point outwards) - Reuse logic from side generation if needed,
-            // but often averaging is okay for corners unless polygon is very complex.
-            // For simplicity, let's assume basic outward pointing here. A full check would involve polygon center again.
-
-            // Calculate the corner's rotation: facing the average direction of the two outward normals
-            Vector3 avgNormal = (sideNormalPrev + sideNormalNext).normalized;
-            // We need to ensure this average normal points *outwards* from the corner angle
-            Vector3 angleBisectorInternal = (-dirToPrev + dirToNext).normalized; // Vector pointing "into" the angle between sides
-            if (Vector3.Dot(avgNormal, angleBisectorInternal) > 0) // If avgNormal points inwards with the bisector
+            // Robust check: Bisector method to ensure outward facing normal
+            Vector3 angleBisectorInternal = (-dirToPrev + dirToNext).normalized;
+            if (Vector3.Dot(avgNormal, angleBisectorInternal) > 0)
             {
-                avgNormal *= -1; // Flip it
+                avgNormal *= -1; // Flip if pointing inwards
             }
-
+            avgNormal.Normalize(); // Normalize after potential flip
             Quaternion cornerRotation = Quaternion.LookRotation(avgNormal);
+            // --- End Rotation Calculation ---
 
 
-            // Determine the height of the corner element
+            // --- Determine Corner Height (Same as before) ---
             int prevSideIndex = (i + vertexData.Count - 1) % vertexData.Count;
             int nextSideIndex = i;
-            int cornerMiddleFloors = 0;
+            int cornerMiddleFloors = 0; // This determines the number of *standard* middle floors for the corner
 
             switch (cornerHeightMode)
             {
@@ -257,34 +255,92 @@ public class PolygonBuildingGenerator : MonoBehaviour
                     break;
                 case CornerHeightMode.FullDefaultHeight:
                 default:
-                    cornerMiddleFloors = middleFloors; // Use the global default
+                    cornerMiddleFloors = middleFloors;
                     break;
             }
+            // --- End Height Calculation ---
 
-            // Instantiate corner elements vertically
+
+            // --- Instantiate Corner Stack ---
             float currentY = 0;
-            float cornerWidth = nominalFacadeWidth; // Assume corner pieces have standard width, no scaling needed usually
+            float cornerWidth = nominalFacadeWidth; // Usually no scaling for corners
 
-            // Ground Corner (Use first prefab or create a dedicated list?)
+            // Calculate total number of regular segments needed before the cap
+            int totalSegments = 1 + cornerMiddleFloors; // Ground + Middle
+            bool willHaveMansard = useMansardFloor; // Should this corner have a mansard segment?
+            bool willHaveAttic = useAtticFloor;     // Should this corner have an attic segment?
+
+            // Optional: Add logic here if corner height should *also* affect mansard/attic presence
+            // e.g., if CornerHeightMode.MatchShortest results in 0 middle floors, maybe skip mansard/attic too?
+            // For now, we assume global useMansardFloor/useAtticFloor apply.
+
+            int regularSegmentsBeforeCap = totalSegments;
+            if (willHaveMansard) regularSegmentsBeforeCap++;
+            if (willHaveAttic) regularSegmentsBeforeCap++;
+            // Decrement if we have a cap prefab to place instead of the topmost regular segment
+            bool placeCap = cornerCapPrefabs != null && cornerCapPrefabs.Count > 0;
+            if (placeCap)
+            {
+                regularSegmentsBeforeCap = Mathf.Max(0, regularSegmentsBeforeCap - 1);
+            }
+
+
+            // Instantiate Ground Floor Corner
             InstantiateFloorSegment(cornerElementPrefabs, currentPos, cornerRotation, cornersParent.transform, cornerWidth);
             currentY += floorHeight;
-            // Middle Corners
+
+            // Instantiate Middle Floor Corners
             for (int floor = 0; floor < cornerMiddleFloors; floor++)
             {
-                InstantiateFloorSegment(cornerElementPrefabs, currentPos + Vector3.up * currentY, cornerRotation, cornersParent.transform, cornerWidth);
+                // Only instantiate if we haven't reached the segment limit before the cap
+                if (1 + floor < regularSegmentsBeforeCap)
+                {
+                    InstantiateFloorSegment(cornerElementPrefabs, currentPos + Vector3.up * currentY, cornerRotation, cornersParent.transform, cornerWidth);
+                }
                 currentY += floorHeight;
             }
-            // Mansard Corner (Optional: use same prefabs or dedicated list)
+
+            // Instantiate Mansard Corner (if applicable and before cap)
             if (useMansardFloor)
             {
-                InstantiateFloorSegment(cornerElementPrefabs, currentPos + Vector3.up * currentY, cornerRotation, cornersParent.transform, cornerWidth);
+                // Check if this segment is before the cap limit
+                if (1 + cornerMiddleFloors < regularSegmentsBeforeCap)
+                {
+                    InstantiateFloorSegment(cornerElementPrefabs, currentPos + Vector3.up * currentY, cornerRotation, cornersParent.transform, cornerWidth);
+                }
                 currentY += floorHeight;
             }
-            // Attic Corner (Optional: use same prefabs or dedicated list)
+
+            // Instantiate Attic Corner (if applicable and before cap)
             if (useAtticFloor)
             {
-                InstantiateFloorSegment(cornerElementPrefabs, currentPos + Vector3.up * currentY, cornerRotation, cornersParent.transform, cornerWidth);
+                // Check if this segment is before the cap limit
+                if (1 + cornerMiddleFloors + (useMansardFloor ? 1 : 0) < regularSegmentsBeforeCap)
+                {
+                    InstantiateFloorSegment(cornerElementPrefabs, currentPos + Vector3.up * currentY, cornerRotation, cornersParent.transform, cornerWidth);
+                }
+                // currentY += floorHeight; // Don't increment Y after the last potential segment position
             }
+
+            // Instantiate the Cap at the final position
+            if (placeCap)
+            {
+                // Calculate the Y position for the cap. It sits *on top* of the last segment placed or where it would have been.
+                // The 'currentY' variable now holds the height *after* the potential attic position.
+                float capY = currentPos.y; // Start at base
+                capY += floorHeight * (1 + cornerMiddleFloors); // Add ground and middle heights
+                if (useMansardFloor) capY += floorHeight;
+                if (useAtticFloor) capY += floorHeight;
+
+                // If we placed regular segments, capY should align with the top of the last one.
+                // If regularSegmentsBeforeCap is 0 (meaning only a cap), capY should be currentPos.y
+                // Let's recalculate capY based on regularSegmentsBeforeCap for robustness.
+                capY = currentPos.y + floorHeight * regularSegmentsBeforeCap;
+
+
+                InstantiateFloorSegment(cornerCapPrefabs, currentPos + Vector3.up * capY, cornerRotation, cornersParent.transform, cornerWidth);
+            }
+            // --- End Instantiate Corner Stack ---
         }
     }
 
