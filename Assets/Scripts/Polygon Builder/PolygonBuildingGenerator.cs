@@ -1,228 +1,335 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-[RequireComponent(typeof(MeshFilter))] // Optional: If you want to generate a base mesh
+// Make sure PolygonVertexData and PolygonSideData scripts exist in your project
+
+[RequireComponent(typeof(MeshFilter))]
 public class PolygonBuildingGenerator : MonoBehaviour
 {
     [Header("Polygon Definition")]
-    public List<Vector3> vertices = new List<Vector3>() {
-        new Vector3(0, 0, 0),
-        new Vector3(0, 0, 5),
-        new Vector3(5, 0, 5),
-        new Vector3(5, 0, 0)
-    }; // Local space vertices
+    // Replace List<Vector3> with List<PolygonVertexData>
+    public List<PolygonVertexData> vertexData = new List<PolygonVertexData>() {
+        new PolygonVertexData { position = new Vector3(0, 0, 0) },
+        new PolygonVertexData { position = new Vector3(0, 0, 5) },
+        new PolygonVertexData { position = new Vector3(5, 0, 5) },
+        new PolygonVertexData { position = new Vector3(5, 0, 0) }
+    };
+    // Add List<PolygonSideData>
+    public List<PolygonSideData> sideData = new List<PolygonSideData>(); // Will be synchronized by the editor script
+
     public float vertexSnapSize = 1.0f;
     public int minSideLengthUnits = 1;
 
     [Header("Building Settings")]
-    public int middleFloors = 3; // Number of floors between ground and mansard/attic
-    public float floorHeight = 3.0f; // Height of one standard floor
+    public int middleFloors = 3;
+    public float floorHeight = 3.0f;
     public bool useMansardFloor = true;
     public bool useAtticFloor = true;
     public bool allowHeightVariation = false;
-    [Range(0, 5)]
-    public int maxHeightVariation = 1; // Max number of floors +/- from the base height per side
+    [Range(0, 5)] public int maxHeightVariation = 1;
 
-    // Add a setting to control this behaviour
     [Header("Facade Placement")]
     [Tooltip("Distribute facade scaling evenly across the side to fill gaps, instead of strict 1-unit placement.")]
-    public bool scaleFacadesToFitSide = true; // Default to true for smoother results
-    public float nominalFacadeWidth = 1.0f; // The ideal width of your facade prefabs
+    public bool scaleFacadesToFitSide = true;
+    public float nominalFacadeWidth = 1.0f;
 
-    [Header("Prefabs (Assign 1x1 Unit Facades)")]
-    public List<GameObject> groundFloorPrefabs;
-    public List<GameObject> middleFloorPrefabs;
-    public List<GameObject> mansardFloorPrefabs; // Optional
-    public List<GameObject> atticFloorPrefabs;  // Optional (Sloped)
+    [Header("Default Prefabs")] // Renamed for clarity
+    public List<GameObject> defaultGroundFloorPrefabs;
+    public List<GameObject> defaultMiddleFloorPrefabs;
+    public List<GameObject> defaultMansardFloorPrefabs;
+    public List<GameObject> defaultAtticFloorPrefabs;
 
-    // Keep track of generated objects for easy clearing
+    [Header("Corner Elements")]
+    public List<GameObject> cornerElementPrefabs;
+    // Define how high corner elements should go
+    public enum CornerHeightMode { MatchShortest, MatchTallest, FullDefaultHeight }
+    public CornerHeightMode cornerHeightMode = CornerHeightMode.MatchShortest;
+
     private GameObject generatedBuildingRoot;
     private const string ROOT_NAME = "Generated Building";
+    private const string CORNERS_NAME = "Corner Elements";
 
-    // --- Public Methods (called by Editor script or manually) ---
+
+    // Ensure sideData list count matches vertexData list count
+    // Call this from OnValidate or the editor script to keep things synced
+    public void SynchronizeSideData()
+    {
+        int requiredCount = vertexData.Count;
+        // Add missing entries
+        while (sideData.Count < requiredCount)
+        {
+            sideData.Add(new PolygonSideData());
+        }
+        // Remove excess entries
+        while (sideData.Count > requiredCount && sideData.Count > 0)
+        {
+            sideData.RemoveAt(sideData.Count - 1);
+        }
+    }
+
+    // Called when script values are changed in the inspector (Editor only)
+    void OnValidate()
+    {
+        // Ensure sideData count matches vertexData count when edited in inspector
+        if (vertexData == null) vertexData = new List<PolygonVertexData>();
+        if (sideData == null) sideData = new List<PolygonSideData>();
+        SynchronizeSideData();
+    }
+
 
     public void GenerateBuilding()
     {
         ClearBuilding();
+        SynchronizeSideData(); // Ensure lists are synced before generation
 
-        if (vertices.Count < 3)
+        if (vertexData.Count < 3)
         {
             Debug.LogWarning("Cannot generate building, polygon needs at least 3 vertices.");
             return;
         }
 
         generatedBuildingRoot = new GameObject(ROOT_NAME);
-        generatedBuildingRoot.transform.SetParent(this.transform);
-        generatedBuildingRoot.transform.localPosition = Vector3.zero;
-        generatedBuildingRoot.transform.localRotation = Quaternion.identity;
+        generatedBuildingRoot.transform.SetParent(this.transform, false);
 
-        // --- Calculate Polygon Center (for normal check) ---
+        // --- Calculate Polygon Center ---
         Vector3 polygonCenter = Vector3.zero;
-        if (vertices.Count > 0)
+        if (vertexData.Count > 0)
         {
-            foreach (Vector3 v in vertices) polygonCenter += v;
-            polygonCenter /= vertices.Count;
+            foreach (var vd in vertexData) polygonCenter += vd.position;
+            polygonCenter /= vertexData.Count;
         }
         // ---
 
-        // --- Generate Walls side by side ---
-        for (int i = 0; i < vertices.Count; i++)
-        {
-            // --- Create Parent for this Side ---
-            GameObject sideParent = new GameObject($"Side_{i}");
-            sideParent.transform.SetParent(generatedBuildingRoot.transform, false); // Use worldPositionStays = false
-                                                                                    // Set position relative to the building root (which is at local 0,0,0)
-            sideParent.transform.localPosition = Vector3.zero;
-            sideParent.transform.localRotation = Quaternion.identity;
-            // ---
+        // Store calculated side heights for corner generation
+        int[] sideMiddleFloors = new int[vertexData.Count];
 
-            Vector3 p1 = vertices[i];
-            Vector3 p2 = vertices[(i + 1) % vertices.Count];
+
+        // --- Generate Walls side by side ---
+        for (int i = 0; i < vertexData.Count; i++)
+        {
+            GameObject sideParent = new GameObject($"Side_{i}");
+            sideParent.transform.SetParent(generatedBuildingRoot.transform, false);
+
+            PolygonVertexData v1 = vertexData[i];
+            PolygonVertexData v2 = vertexData[(i + 1) % vertexData.Count]; // Wrap around
+            Vector3 p1 = v1.position;
+            Vector3 p2 = v2.position;
 
             Vector3 sideVector = p2 - p1;
             float sideDistance = sideVector.magnitude;
             Vector3 sideDirection = sideVector.normalized;
 
-            if (sideDistance < 0.01f) continue; // Skip zero-length sides
+            if (sideDistance < 0.01f) continue;
 
-            // --- Calculate Normal (Robust Check) ---
-            // Cross product gives a perpendicular vector on the local XZ plane
+            // --- Calculate Normal ---
             Vector3 sideNormal = Vector3.Cross(sideDirection, Vector3.up).normalized;
-            // Check if it points away from the calculated polygon center
             Vector3 sideMidpoint = p1 + sideDirection * (sideDistance / 2f);
             Vector3 centerToMidpoint = sideMidpoint - polygonCenter;
-            // Ensure the check considers only the XZ plane projection if center isn't at Y=0
             centerToMidpoint.y = 0;
-            sideNormal.y = 0;
-            if (Vector3.Dot(sideNormal.normalized, centerToMidpoint.normalized) < 0)
+            Vector3 checkNormal = sideNormal; checkNormal.y = 0; // Compare on XZ plane
+            if (Vector3.Dot(checkNormal.normalized, centerToMidpoint.normalized) < -0.01f) // Add tolerance
             {
-                sideNormal *= -1; // Flip if pointing inwards relative to center
-            }
-            // --- End Normal Check ---
-
-
-            // --- Determine Number of Segments and Actual Width ---
-            // Calculate how many nominal units *would* fit
-            int numSegments = Mathf.Max(minSideLengthUnits, Mathf.RoundToInt(sideDistance / nominalFacadeWidth));
-
-            // Calculate the exact width each segment needs to be to perfectly fill sideDistance
-            float actualSegmentWidth = sideDistance / numSegments;
-
-            // If scaling is disabled, force segment width to nominal, potentially leaving gaps/overlaps handled visually
-            if (!scaleFacadesToFitSide)
-            {
-                actualSegmentWidth = nominalFacadeWidth;
-                // Recalculate numSegments based on strict placement if needed, though the original numSegments is usually fine.
-                numSegments = Mathf.Max(minSideLengthUnits, Mathf.FloorToInt(sideDistance / nominalFacadeWidth));
-                if (numSegments == 0 && minSideLengthUnits > 0) numSegments = minSideLengthUnits; // Ensure minimum
+                sideNormal *= -1;
             }
             // ---
 
-            // Determine height for this specific side if variation is enabled
-            int currentMiddleFloors = middleFloors;
+            // --- Determine Segments & Width ---
+            int numSegments = Mathf.Max(minSideLengthUnits, Mathf.RoundToInt(sideDistance / nominalFacadeWidth));
+            float actualSegmentWidth = scaleFacadesToFitSide ? (sideDistance / numSegments) : nominalFacadeWidth;
+            if (!scaleFacadesToFitSide)
+            {
+                numSegments = Mathf.Max(minSideLengthUnits, Mathf.FloorToInt(sideDistance / nominalFacadeWidth));
+                if (numSegments == 0 && minSideLengthUnits > 0) numSegments = minSideLengthUnits;
+            }
+            // ---
+
+            // --- Determine Height & Prefab Lists for this Side ---
+            int currentMiddleFloors = middleFloors; // Start with default
+                                                    // Check side-specific override logic here if you added it to PolygonSideData
+                                                    // if (sideData[i].overrideHeight) { currentMiddleFloors = sideData[i].sideMiddleFloors; } else ...
             if (allowHeightVariation)
             {
-                // Use a deterministic seed based on side index for consistency if needed
-                // Random.InitState(i); // Uncomment for consistent random height per side across regenerations
+                // Apply global variation rule if no side-specific rule is active
                 currentMiddleFloors = Mathf.Max(0, middleFloors + Random.Range(-maxHeightVariation, maxHeightVariation + 1));
             }
+            sideMiddleFloors[i] = currentMiddleFloors; // Store for corner calculation
+
+            // Determine which prefab lists to use
+            PolygonSideData currentSideSettings = sideData[i];
+            List<GameObject> currentGroundPrefabs = (currentSideSettings.overridePrefabs && currentSideSettings.groundFloorPrefabs.Count > 0) ? currentSideSettings.groundFloorPrefabs : defaultGroundFloorPrefabs;
+            List<GameObject> currentMiddlePrefabs = (currentSideSettings.overridePrefabs && currentSideSettings.middleFloorPrefabs.Count > 0) ? currentSideSettings.middleFloorPrefabs : defaultMiddleFloorPrefabs;
+            List<GameObject> currentMansardPrefabs = (currentSideSettings.overridePrefabs && currentSideSettings.mansardFloorPrefabs.Count > 0) ? currentSideSettings.mansardFloorPrefabs : defaultMansardFloorPrefabs;
+            List<GameObject> currentAtticPrefabs = (currentSideSettings.overridePrefabs && currentSideSettings.atticFloorPrefabs.Count > 0) ? currentSideSettings.atticFloorPrefabs : defaultAtticFloorPrefabs;
+            // ---
 
             for (int j = 0; j < numSegments; j++)
             {
-                // Calculate center position for this segment along the side
-                // Use actualSegmentWidth for positioning
                 Vector3 segmentBasePos = p1 + sideDirection * (actualSegmentWidth * (j + 0.5f));
                 Quaternion segmentRotation = Quaternion.LookRotation(sideNormal);
-
-                // Instantiate floors vertically
                 float currentY = 0;
 
-                // 1. Ground Floor
-                InstantiateFloorSegment(groundFloorPrefabs, segmentBasePos, segmentRotation, sideParent.transform, actualSegmentWidth);
+                // Ground
+                InstantiateFloorSegment(currentGroundPrefabs, segmentBasePos, segmentRotation, sideParent.transform, actualSegmentWidth);
                 currentY += floorHeight;
-
-                // 2. Middle Floors
+                // Middle
                 for (int floor = 0; floor < currentMiddleFloors; floor++)
                 {
-                    Vector3 floorPos = segmentBasePos + Vector3.up * currentY;
-                    InstantiateFloorSegment(middleFloorPrefabs, floorPos, segmentRotation, sideParent.transform, actualSegmentWidth);
+                    InstantiateFloorSegment(currentMiddlePrefabs, segmentBasePos + Vector3.up * currentY, segmentRotation, sideParent.transform, actualSegmentWidth);
                     currentY += floorHeight;
                 }
-
-                // 3. Mansard Floor
-                if (useMansardFloor && mansardFloorPrefabs != null && mansardFloorPrefabs.Count > 0)
+                // Mansard
+                if (useMansardFloor)
                 {
-                    Vector3 floorPos = segmentBasePos + Vector3.up * currentY;
-                    InstantiateFloorSegment(mansardFloorPrefabs, floorPos, segmentRotation, sideParent.transform, actualSegmentWidth);
+                    InstantiateFloorSegment(currentMansardPrefabs, segmentBasePos + Vector3.up * currentY, segmentRotation, sideParent.transform, actualSegmentWidth);
                     currentY += floorHeight;
                 }
-
-                // 4. Attic Floor
-                if (useAtticFloor && atticFloorPrefabs != null && atticFloorPrefabs.Count > 0)
+                // Attic
+                if (useAtticFloor)
                 {
-                    Vector3 floorPos = segmentBasePos + Vector3.up * currentY;
-                    InstantiateFloorSegment(atticFloorPrefabs, floorPos, segmentRotation, sideParent.transform, actualSegmentWidth);
-                    // currentY += floorHeight; // No height increase needed
+                    InstantiateFloorSegment(currentAtticPrefabs, segmentBasePos + Vector3.up * currentY, segmentRotation, sideParent.transform, actualSegmentWidth);
                 }
+            }
+        }
+
+        // --- Generate Corner Elements ---
+        GenerateCornerElements(sideMiddleFloors); // Pass calculated heights
+    }
+
+
+    void GenerateCornerElements(int[] sideHeights)
+    {
+        if (cornerElementPrefabs == null || cornerElementPrefabs.Count == 0) return; // Nothing to spawn
+
+        GameObject cornersParent = new GameObject(CORNERS_NAME);
+        cornersParent.transform.SetParent(generatedBuildingRoot.transform, false);
+
+        for (int i = 0; i < vertexData.Count; i++)
+        {
+            if (!vertexData[i].addCornerElement) continue; // Skip if flag is false
+
+            // Get vertex and its neighbours
+            PolygonVertexData currentV = vertexData[i];
+            PolygonVertexData prevV = vertexData[(i + vertexData.Count - 1) % vertexData.Count]; // Previous vertex (handles wrap around)
+            PolygonVertexData nextV = vertexData[(i + 1) % vertexData.Count];                   // Next vertex
+
+            Vector3 currentPos = currentV.position;
+            Vector3 prevPos = prevV.position;
+            Vector3 nextPos = nextV.position;
+
+            // Calculate incoming and outgoing directions at the vertex
+            Vector3 dirToPrev = (prevPos - currentPos).normalized;
+            Vector3 dirToNext = (nextPos - currentPos).normalized;
+
+            // Calculate the normals of the two sides meeting at this vertex
+            // Side Prev->Current
+            Vector3 sideNormalPrev = Vector3.Cross((currentPos - prevPos).normalized, Vector3.up).normalized;
+            // Side Current->Next
+            Vector3 sideNormalNext = Vector3.Cross(dirToNext, Vector3.up).normalized;
+
+            // Robust Normal Check (ensure they point outwards) - Reuse logic from side generation if needed,
+            // but often averaging is okay for corners unless polygon is very complex.
+            // For simplicity, let's assume basic outward pointing here. A full check would involve polygon center again.
+
+            // Calculate the corner's rotation: facing the average direction of the two outward normals
+            Vector3 avgNormal = (sideNormalPrev + sideNormalNext).normalized;
+            // We need to ensure this average normal points *outwards* from the corner angle
+            Vector3 angleBisectorInternal = (-dirToPrev + dirToNext).normalized; // Vector pointing "into" the angle between sides
+            if (Vector3.Dot(avgNormal, angleBisectorInternal) > 0) // If avgNormal points inwards with the bisector
+            {
+                avgNormal *= -1; // Flip it
+            }
+
+            Quaternion cornerRotation = Quaternion.LookRotation(avgNormal);
+
+
+            // Determine the height of the corner element
+            int prevSideIndex = (i + vertexData.Count - 1) % vertexData.Count;
+            int nextSideIndex = i;
+            int cornerMiddleFloors = 0;
+
+            switch (cornerHeightMode)
+            {
+                case CornerHeightMode.MatchShortest:
+                    cornerMiddleFloors = Mathf.Min(sideHeights[prevSideIndex], sideHeights[nextSideIndex]);
+                    break;
+                case CornerHeightMode.MatchTallest:
+                    cornerMiddleFloors = Mathf.Max(sideHeights[prevSideIndex], sideHeights[nextSideIndex]);
+                    break;
+                case CornerHeightMode.FullDefaultHeight:
+                default:
+                    cornerMiddleFloors = middleFloors; // Use the global default
+                    break;
+            }
+
+            // Instantiate corner elements vertically
+            float currentY = 0;
+            float cornerWidth = nominalFacadeWidth; // Assume corner pieces have standard width, no scaling needed usually
+
+            // Ground Corner (Use first prefab or create a dedicated list?)
+            InstantiateFloorSegment(cornerElementPrefabs, currentPos, cornerRotation, cornersParent.transform, cornerWidth);
+            currentY += floorHeight;
+            // Middle Corners
+            for (int floor = 0; floor < cornerMiddleFloors; floor++)
+            {
+                InstantiateFloorSegment(cornerElementPrefabs, currentPos + Vector3.up * currentY, cornerRotation, cornersParent.transform, cornerWidth);
+                currentY += floorHeight;
+            }
+            // Mansard Corner (Optional: use same prefabs or dedicated list)
+            if (useMansardFloor)
+            {
+                InstantiateFloorSegment(cornerElementPrefabs, currentPos + Vector3.up * currentY, cornerRotation, cornersParent.transform, cornerWidth);
+                currentY += floorHeight;
+            }
+            // Attic Corner (Optional: use same prefabs or dedicated list)
+            if (useAtticFloor)
+            {
+                InstantiateFloorSegment(cornerElementPrefabs, currentPos + Vector3.up * currentY, cornerRotation, cornersParent.transform, cornerWidth);
             }
         }
     }
 
     public void ClearBuilding()
     {
-        // Find children GameObjects named "GeneratedBuilding" under this transform
         while (transform.Find(ROOT_NAME) != null)
         {
             Transform existingRoot = transform.Find(ROOT_NAME);
-            if (Application.isEditor && !Application.isPlaying)
-            {
-                DestroyImmediate(existingRoot.gameObject);
-            }
-            else
-            {
-                Destroy(existingRoot.gameObject);
-            }
+            if (Application.isEditor && !Application.isPlaying) DestroyImmediate(existingRoot.gameObject);
+            else Destroy(existingRoot.gameObject);
         }
         generatedBuildingRoot = null;
     }
 
-
-    // --- Helper Methods ---
-
     private void InstantiateFloorSegment(List<GameObject> prefabList, Vector3 localPosition, Quaternion localRotation, Transform parent, float segmentWidth)
     {
-        if (prefabList == null || prefabList.Count == 0) return;
+        if (prefabList == null || prefabList.Count == 0) { /*Debug.LogWarning($"Prefab list empty for {parent.name}");*/ return; } // Avoid spam
 
         int randomIndex = Random.Range(0, prefabList.Count);
         GameObject prefab = prefabList[randomIndex];
         if (prefab == null) return;
 
-        // Instantiate under the specific side's parent
         GameObject instance = Instantiate(prefab, parent);
-
-        // Set local position and rotation relative to the side parent
         instance.transform.localPosition = localPosition;
         instance.transform.localRotation = localRotation;
 
-        // Apply scaling based on the calculated segment width
-        // Assumes original prefab is designed to be nominalFacadeWidth (e.g., 1.0) wide along its local X axis
-        Vector3 originalScale = prefab.transform.localScale; // Use prefab's scale as base if needed, but often it's (1,1,1)
-        float scaleFactor = segmentWidth / nominalFacadeWidth;
-        instance.transform.localScale = new Vector3(originalScale.x * scaleFactor, originalScale.y, originalScale.z);
+        // Only apply scaling if the feature is enabled *and* the width is different from nominal
+        if (scaleFacadesToFitSide && Mathf.Abs(segmentWidth - nominalFacadeWidth) > 0.01f)
+        {
+            Vector3 originalScale = instance.transform.localScale; // Use instance's initial scale
+            float scaleFactor = segmentWidth / nominalFacadeWidth;
+            // Apply scaling only on X axis relative to nominal size
+            instance.transform.localScale = new Vector3(originalScale.x * scaleFactor, originalScale.y, originalScale.z);
+        }
+        // else: Keep the original prefab scale (important for corners or when scaleFacadesToFitSide=false)
 
-        // Note: Instantiating with parent and then setting local transforms is generally reliable.
-        // The previous world space conversion is not needed here as we parent first.
     }
 
-    // Snaps a single vertex position based on snapSize
-    public Vector3 SnapVertex(Vector3 vertex)
+    // Modify SnapVertex to work with PolygonVertexData
+    public Vector3 SnapVertexPosition(Vector3 vertexPos)
     {
-        // Snap each component (X, Y, Z) to the nearest multiple of vertexSnapSize
-        // Keep Y at 0 for a flat polygon base, unless you want verticality in the base polygon
         return new Vector3(
-            Mathf.Round(vertex.x / vertexSnapSize) * vertexSnapSize,
-            0f, // Keep base polygon flat on local Y=0 plane
-            Mathf.Round(vertex.z / vertexSnapSize) * vertexSnapSize
+            Mathf.Round(vertexPos.x / vertexSnapSize) * vertexSnapSize,
+            0f,
+            Mathf.Round(vertexPos.z / vertexSnapSize) * vertexSnapSize
         );
     }
 }

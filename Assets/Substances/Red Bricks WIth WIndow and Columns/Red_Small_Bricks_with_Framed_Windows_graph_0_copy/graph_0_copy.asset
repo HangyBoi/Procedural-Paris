@@ -145,7 +145,7 @@ MonoBehaviour:
   CurrentStatePreset: " <sbspreset pkgurl=\"pkg://Red_Small_Bricks_with_Framed_Windows\"
     label=\"\" >\n  <presetinput identifier=\"$outputsize\" uid=\"1774086595\" type=\"8\"
     value=\"10,10\" />\n  <presetinput identifier=\"$randomseed\" uid=\"1053589393\"
-    type=\"4\" value=\"343\" />\n </sbspreset>\n"
+    type=\"4\" value=\"3707\" />\n </sbspreset>\n"
   IsRuntimeOnly: 0
   GenerateAllOutputs: 0
   GenerateAllMipmaps: 1
@@ -193,7 +193,7 @@ MonoBehaviour:
           GuiDescription: 
           Type: 4
           WidgetType: 0
-        Data: 343
+        Data: 3707
         NumericalDescription:
           DefaultValue: 0
           MinValue: 0
