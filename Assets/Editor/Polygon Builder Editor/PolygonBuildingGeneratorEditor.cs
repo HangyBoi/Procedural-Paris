@@ -30,16 +30,71 @@ public class PolygonBuildingGeneratorEditor : Editor
 
     public override void OnInspectorGUI()
     {
-        serializedObject.Update(); // Always start with this when using SerializedProperties
+        serializedObject.Update(); // Start
 
-        DrawDefaultInspector(); // Draws default fields like snap size, heights, prefabs etc.
+        // --- Use DrawPropertiesExcluding ---
+        // List all the properties we are handling MANUALLY later in the Inspector GUI
+        string[] propertiesToExclude = new string[] {
+            "m_Script", // Always exclude the script field itself
+            "vertexData",
+            "sideData"
+            // Add any other fields you might draw manually later
+        };
+        // Draw all properties *except* the ones listed above
+        DrawPropertiesExcluding(serializedObject, propertiesToExclude);
+        // ---
+
+        // No need for the second EditorGUILayout.LabelField("Polygon Definition")
 
         EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Polygon Data", EditorStyles.boldLabel); // Use a more specific title
 
-        // --- Generation Buttons ---
+        // --- Vertex Data List ---
+        EditorGUILayout.PropertyField(_vertexDataProp, true);
+
+        // --- Side Data List (Overrides) ---
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Per-Side Prefab Overrides", EditorStyles.boldLabel);
+        EditorGUI.indentLevel++;
+        if (_vertexDataProp.arraySize != _sideDataProp.arraySize)
+        {
+            EditorGUILayout.HelpBox("Vertex and Side data count mismatch! Regenerating or changing vertex count might fix this.", MessageType.Warning);
+            // Avoid forceful sync here, let user action or OnValidate handle it
+            // _targetScript.SynchronizeSideData();
+        }
+        else if (_sideDataProp != null) // Add null check
+        {
+            EditorGUILayout.PropertyField(_sideDataProp, true); // Draw the sideData list
+        }
+        EditorGUI.indentLevel--;
+
+        // --- Polygon Editing Buttons ---
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Polygon Editing Tools", EditorStyles.boldLabel);
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button("Add Vertex"))
+        {
+            AddVertex();
+            _targetScript.SynchronizeSideData(); // Ensure sync after add/remove
+            serializedObject.ApplyModifiedProperties(); // Apply before repaint
+            SceneView.RepaintAll();
+        }
+        EditorGUI.BeginDisabledGroup(_vertexDataProp.arraySize <= 3);
+        if (GUILayout.Button("Remove Last Vertex"))
+        {
+            RemoveLastVertex();
+            _targetScript.SynchronizeSideData(); // Ensure sync after add/remove
+            serializedObject.ApplyModifiedProperties(); // Apply before repaint
+            SceneView.RepaintAll();
+        }
+        EditorGUI.EndDisabledGroup();
+        EditorGUILayout.EndHorizontal();
+
+        // --- Generation Buttons (Moved down for better flow) ---
+        EditorGUILayout.Space();
         if (GUILayout.Button("Generate Building"))
         {
-            SnapAllVertices(); // Snap before generating
+            SnapAllVertices();
             _targetScript.GenerateBuilding();
             SceneView.RepaintAll();
         }
@@ -48,67 +103,14 @@ public class PolygonBuildingGeneratorEditor : Editor
             _targetScript.ClearBuilding();
             SceneView.RepaintAll();
         }
+        // --- End Generation Buttons ---
 
-        EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Polygon Definition", EditorStyles.boldLabel);
 
-        // --- Vertex Data List ---
-        // Use EditorGUILayout.PropertyField for complex lists
-        // This gives basic list editing (size, elements) but isn't ideal for vertex-specific flags like 'addCornerElement'
-        // You might want a custom loop here later for better UI.
-        EditorGUILayout.PropertyField(_vertexDataProp, true); // Draw the vertexData list
-
-        // --- Side Data List (Overrides) ---
-        EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Per-Side Prefab Overrides", EditorStyles.boldLabel);
-        EditorGUI.indentLevel++;
-        // Show the sideData list - each element allows overriding prefabs for that side
-        // Note: The index corresponds to the side starting at that vertex index
-        // e.g., sideData[0] is for the side between vertexData[0] and vertexData[1]
-        if (_vertexDataProp.arraySize != _sideDataProp.arraySize)
+        // Apply changes at the end
+        if (serializedObject.ApplyModifiedProperties())
         {
-            EditorGUILayout.HelpBox("Vertex and Side data count mismatch! Please regenerate or fix manually.", MessageType.Error);
-            _targetScript.SynchronizeSideData(); // Attempt to fix
-        }
-        else
-        {
-            EditorGUILayout.PropertyField(_sideDataProp, true); // Draw the sideData list
-        }
-        EditorGUI.indentLevel--;
-
-
-        // --- Polygon Editing Buttons ---
-        EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Polygon Editing Tools", EditorStyles.boldLabel);
-        EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("Add Vertex"))
-        {
-            AddVertex(); // Use helper function
-            // OnValidate should automatically sync sideData, but force it just in case
-            _targetScript.SynchronizeSideData();
-            serializedObject.ApplyModifiedProperties(); // Apply changes after adding
-            SceneView.RepaintAll();
-        }
-        // Disable removal if polygon is too small
-        EditorGUI.BeginDisabledGroup(_vertexDataProp.arraySize <= 3);
-        if (GUILayout.Button("Remove Last Vertex"))
-        {
-            RemoveLastVertex(); // Use helper function
-                                // OnValidate should automatically sync sideData, but force it just in case
-            _targetScript.SynchronizeSideData();
-            serializedObject.ApplyModifiedProperties(); // Apply changes after removing
-            SceneView.RepaintAll();
-        }
-        EditorGUI.EndDisabledGroup();
-        EditorGUILayout.EndHorizontal();
-
-
-        // Apply changes made in the inspector & repaint
-        if (serializedObject.ApplyModifiedProperties()) // Apply changes & check if anything changed
-        {
-            // Optionally snap if relevant properties (like snap size) changed
-            // SnapAllVertices(); // Maybe too aggressive to do on every inspector change
-            _targetScript.SynchronizeSideData(); // Ensure sync on any change
+            // OnValidate should handle sync if properties like vertex count change directly
+            // _targetScript.SynchronizeSideData(); // Redundant if OnValidate works
             EditorUtility.SetDirty(_targetScript);
             SceneView.RepaintAll();
         }
