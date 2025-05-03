@@ -23,6 +23,12 @@ public class PolygonBuildingGenerator : MonoBehaviour
     [Range(0, 5)]
     public int maxHeightVariation = 1; // Max number of floors +/- from the base height per side
 
+    // Add a setting to control this behaviour
+    [Header("Facade Placement")]
+    [Tooltip("Distribute facade scaling evenly across the side to fill gaps, instead of strict 1-unit placement.")]
+    public bool scaleFacadesToFitSide = true; // Default to true for smoother results
+    public float nominalFacadeWidth = 1.0f; // The ideal width of your facade prefabs
+
     [Header("Prefabs (Assign 1x1 Unit Facades)")]
     public List<GameObject> groundFloorPrefabs;
     public List<GameObject> middleFloorPrefabs;
@@ -31,13 +37,13 @@ public class PolygonBuildingGenerator : MonoBehaviour
 
     // Keep track of generated objects for easy clearing
     private GameObject generatedBuildingRoot;
-    private const string ROOT_NAME = "GeneratedBuilding";
+    private const string ROOT_NAME = "Generated Building";
 
     // --- Public Methods (called by Editor script or manually) ---
 
     public void GenerateBuilding()
     {
-        ClearBuilding(); // Clear previous generation
+        ClearBuilding();
 
         if (vertices.Count < 3)
         {
@@ -45,106 +51,118 @@ public class PolygonBuildingGenerator : MonoBehaviour
             return;
         }
 
-        // Create a root object to hold all parts
         generatedBuildingRoot = new GameObject(ROOT_NAME);
         generatedBuildingRoot.transform.SetParent(this.transform);
         generatedBuildingRoot.transform.localPosition = Vector3.zero;
         generatedBuildingRoot.transform.localRotation = Quaternion.identity;
 
-        int baseTotalFloors = 1 + middleFloors + (useMansardFloor ? 1 : 0) + (useAtticFloor ? 1 : 0);
+        // --- Calculate Polygon Center (for normal check) ---
+        Vector3 polygonCenter = Vector3.zero;
+        if (vertices.Count > 0)
+        {
+            foreach (Vector3 v in vertices) polygonCenter += v;
+            polygonCenter /= vertices.Count;
+        }
+        // ---
 
         // --- Generate Walls side by side ---
         for (int i = 0; i < vertices.Count; i++)
         {
+            // --- Create Parent for this Side ---
+            GameObject sideParent = new GameObject($"Side_{i}");
+            sideParent.transform.SetParent(generatedBuildingRoot.transform, false); // Use worldPositionStays = false
+                                                                                    // Set position relative to the building root (which is at local 0,0,0)
+            sideParent.transform.localPosition = Vector3.zero;
+            sideParent.transform.localRotation = Quaternion.identity;
+            // ---
+
             Vector3 p1 = vertices[i];
-            Vector3 p2 = vertices[(i + 1) % vertices.Count]; // Wrap around for the last side
+            Vector3 p2 = vertices[(i + 1) % vertices.Count];
 
-            Vector3 sideDirection = (p2 - p1).normalized;
-            float sideDistance = Vector3.Distance(p1, p2);
-            int numSegments = Mathf.Max(minSideLengthUnits, Mathf.RoundToInt(sideDistance / vertexSnapSize)); // Use snapped size for segment count
+            Vector3 sideVector = p2 - p1;
+            float sideDistance = sideVector.magnitude;
+            Vector3 sideDirection = sideVector.normalized;
 
-            if (numSegments <= 0) continue; // Skip zero-length sides
+            if (sideDistance < 0.01f) continue; // Skip zero-length sides
 
-            float actualSegmentLength = sideDistance / numSegments; // How long each segment space actually is
-
-            // Calculate outward normal (assuming polygon is roughly on XZ plane)
-            // Ensure consistent winding order (e.g., clockwise) for correct normals
+            // --- Calculate Normal (Robust Check) ---
+            // Cross product gives a perpendicular vector on the local XZ plane
             Vector3 sideNormal = Vector3.Cross(sideDirection, Vector3.up).normalized;
-
-            // --- Check if normal points outwards ---
-            // Calculate polygon center (approximate)
-            Vector3 center = Vector3.zero;
-            foreach (Vector3 v in vertices) center += v;
-            center /= vertices.Count;
-            // Vector from center to side midpoint
-            Vector3 centerToMidpoint = ((p1 + p2) / 2f) - center;
-            // Flip normal if it points inwards
-            if (Vector3.Dot(sideNormal, centerToMidpoint) < 0)
+            // Check if it points away from the calculated polygon center
+            Vector3 sideMidpoint = p1 + sideDirection * (sideDistance / 2f);
+            Vector3 centerToMidpoint = sideMidpoint - polygonCenter;
+            // Ensure the check considers only the XZ plane projection if center isn't at Y=0
+            centerToMidpoint.y = 0;
+            sideNormal.y = 0;
+            if (Vector3.Dot(sideNormal.normalized, centerToMidpoint.normalized) < 0)
             {
-                sideNormal *= -1;
+                sideNormal *= -1; // Flip if pointing inwards relative to center
             }
             // --- End Normal Check ---
 
+
+            // --- Determine Number of Segments and Actual Width ---
+            // Calculate how many nominal units *would* fit
+            int numSegments = Mathf.Max(minSideLengthUnits, Mathf.RoundToInt(sideDistance / nominalFacadeWidth));
+
+            // Calculate the exact width each segment needs to be to perfectly fill sideDistance
+            float actualSegmentWidth = sideDistance / numSegments;
+
+            // If scaling is disabled, force segment width to nominal, potentially leaving gaps/overlaps handled visually
+            if (!scaleFacadesToFitSide)
+            {
+                actualSegmentWidth = nominalFacadeWidth;
+                // Recalculate numSegments based on strict placement if needed, though the original numSegments is usually fine.
+                numSegments = Mathf.Max(minSideLengthUnits, Mathf.FloorToInt(sideDistance / nominalFacadeWidth));
+                if (numSegments == 0 && minSideLengthUnits > 0) numSegments = minSideLengthUnits; // Ensure minimum
+            }
+            // ---
 
             // Determine height for this specific side if variation is enabled
             int currentMiddleFloors = middleFloors;
             if (allowHeightVariation)
             {
+                // Use a deterministic seed based on side index for consistency if needed
+                // Random.InitState(i); // Uncomment for consistent random height per side across regenerations
                 currentMiddleFloors = Mathf.Max(0, middleFloors + Random.Range(-maxHeightVariation, maxHeightVariation + 1));
             }
-            int currentTotalFloors = 1 + currentMiddleFloors + (useMansardFloor ? 1 : 0) + (useAtticFloor ? 1 : 0);
-
 
             for (int j = 0; j < numSegments; j++)
             {
-                // Calculate center position for this segment on the base polygon line
-                Vector3 segmentBasePos = p1 + sideDirection * (actualSegmentLength * (j + 0.5f));
-                Quaternion segmentRotation = Quaternion.LookRotation(sideNormal); // Prefabs should face +Z locally
+                // Calculate center position for this segment along the side
+                // Use actualSegmentWidth for positioning
+                Vector3 segmentBasePos = p1 + sideDirection * (actualSegmentWidth * (j + 0.5f));
+                Quaternion segmentRotation = Quaternion.LookRotation(sideNormal);
 
-                // Instantiate floors vertically for this segment
+                // Instantiate floors vertically
                 float currentY = 0;
 
                 // 1. Ground Floor
-                InstantiateFloorSegment(groundFloorPrefabs, segmentBasePos, segmentRotation, generatedBuildingRoot.transform);
-                currentY += floorHeight; // Move up for the next floor
+                InstantiateFloorSegment(groundFloorPrefabs, segmentBasePos, segmentRotation, sideParent.transform, actualSegmentWidth);
+                currentY += floorHeight;
 
                 // 2. Middle Floors
                 for (int floor = 0; floor < currentMiddleFloors; floor++)
                 {
                     Vector3 floorPos = segmentBasePos + Vector3.up * currentY;
-                    InstantiateFloorSegment(middleFloorPrefabs, floorPos, segmentRotation, generatedBuildingRoot.transform);
+                    InstantiateFloorSegment(middleFloorPrefabs, floorPos, segmentRotation, sideParent.transform, actualSegmentWidth);
                     currentY += floorHeight;
                 }
 
-                // 3. Mansard Floor (Optional)
-                if (useMansardFloor)
+                // 3. Mansard Floor
+                if (useMansardFloor && mansardFloorPrefabs != null && mansardFloorPrefabs.Count > 0)
                 {
-                    if (mansardFloorPrefabs == null || mansardFloorPrefabs.Count == 0)
-                    {
-                        Debug.LogWarning("Mansard floor enabled but no prefabs assigned.");
-                    }
-                    else
-                    {
-                        Vector3 floorPos = segmentBasePos + Vector3.up * currentY;
-                        InstantiateFloorSegment(mansardFloorPrefabs, floorPos, segmentRotation, generatedBuildingRoot.transform);
-                        currentY += floorHeight; // Assume same height for simplicity
-                    }
+                    Vector3 floorPos = segmentBasePos + Vector3.up * currentY;
+                    InstantiateFloorSegment(mansardFloorPrefabs, floorPos, segmentRotation, sideParent.transform, actualSegmentWidth);
+                    currentY += floorHeight;
                 }
 
-                // 4. Attic Floor (Optional, Sloped)
-                if (useAtticFloor)
+                // 4. Attic Floor
+                if (useAtticFloor && atticFloorPrefabs != null && atticFloorPrefabs.Count > 0)
                 {
-                    if (atticFloorPrefabs == null || atticFloorPrefabs.Count == 0)
-                    {
-                        Debug.LogWarning("Attic floor enabled but no prefabs assigned.");
-                    }
-                    else
-                    {
-                        Vector3 floorPos = segmentBasePos + Vector3.up * currentY;
-                        // Attic might need different rotation/placement logic depending on prefab design
-                        InstantiateFloorSegment(atticFloorPrefabs, floorPos, segmentRotation, generatedBuildingRoot.transform);
-                        // currentY += floorHeight; // No height increase needed after the last floor
-                    }
+                    Vector3 floorPos = segmentBasePos + Vector3.up * currentY;
+                    InstantiateFloorSegment(atticFloorPrefabs, floorPos, segmentRotation, sideParent.transform, actualSegmentWidth);
+                    // currentY += floorHeight; // No height increase needed
                 }
             }
         }
@@ -152,11 +170,10 @@ public class PolygonBuildingGenerator : MonoBehaviour
 
     public void ClearBuilding()
     {
-        // Find the existing root object and destroy it
-        Transform existingRoot = transform.Find(ROOT_NAME);
-        if (existingRoot != null)
+        // Find children GameObjects named "GeneratedBuilding" under this transform
+        while (transform.Find(ROOT_NAME) != null)
         {
-            // Use DestroyImmediate in Editor, Destroy in Play mode
+            Transform existingRoot = transform.Find(ROOT_NAME);
             if (Application.isEditor && !Application.isPlaying)
             {
                 DestroyImmediate(existingRoot.gameObject);
@@ -166,39 +183,35 @@ public class PolygonBuildingGenerator : MonoBehaviour
                 Destroy(existingRoot.gameObject);
             }
         }
-        generatedBuildingRoot = null; // Reset reference
+        generatedBuildingRoot = null;
     }
 
 
     // --- Helper Methods ---
 
-    private void InstantiateFloorSegment(List<GameObject> prefabList, Vector3 position, Quaternion rotation, Transform parent)
+    private void InstantiateFloorSegment(List<GameObject> prefabList, Vector3 localPosition, Quaternion localRotation, Transform parent, float segmentWidth)
     {
-        if (prefabList == null || prefabList.Count == 0)
-        {
-            // Debug.LogWarning($"Prefab list for floor type is empty."); // Can be spammy
-            return;
-        }
+        if (prefabList == null || prefabList.Count == 0) return;
 
         int randomIndex = Random.Range(0, prefabList.Count);
         GameObject prefab = prefabList[randomIndex];
+        if (prefab == null) return;
 
-        if (prefab != null)
-        {
-            GameObject instance = Instantiate(prefab, position, rotation, parent);
-            // Set position/rotation again AFTER parenting if prefab has unusual pivot/transform
-            instance.transform.localPosition = position;
-            instance.transform.localRotation = rotation;
+        // Instantiate under the specific side's parent
+        GameObject instance = Instantiate(prefab, parent);
 
-            // Crucially, align the instantiated object's position TO the calculated position IN WORLD SPACE relative to parent
-            instance.transform.position = parent.TransformPoint(position);
-            instance.transform.rotation = parent.rotation * rotation;
+        // Set local position and rotation relative to the side parent
+        instance.transform.localPosition = localPosition;
+        instance.transform.localRotation = localRotation;
 
-        }
-        else
-        {
-            Debug.LogWarning($"Prefab at index {randomIndex} is null.");
-        }
+        // Apply scaling based on the calculated segment width
+        // Assumes original prefab is designed to be nominalFacadeWidth (e.g., 1.0) wide along its local X axis
+        Vector3 originalScale = prefab.transform.localScale; // Use prefab's scale as base if needed, but often it's (1,1,1)
+        float scaleFactor = segmentWidth / nominalFacadeWidth;
+        instance.transform.localScale = new Vector3(originalScale.x * scaleFactor, originalScale.y, originalScale.z);
+
+        // Note: Instantiating with parent and then setting local transforms is generally reliable.
+        // The previous world space conversion is not needed here as we parent first.
     }
 
     // Snaps a single vertex position based on snapSize
