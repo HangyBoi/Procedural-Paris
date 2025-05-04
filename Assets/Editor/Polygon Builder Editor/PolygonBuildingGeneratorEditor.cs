@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using UnityEngine;
 using UnityEditor;
+using System.Collections.Generic;
 
 [CustomEditor(typeof(PolygonBuildingGenerator))]
 public class PolygonBuildingGeneratorEditor : Editor
@@ -147,7 +148,7 @@ public class PolygonBuildingGeneratorEditor : Editor
                 serializedObject.ApplyModifiedProperties(); // Apply the change
                 EditorUtility.SetDirty(_targetScript);
                 // Optional real-time update (can be slow)
-                // if (Event.current.type == EventType.Used) { _targetScript.GenerateBuilding(); }
+                if (Event.current.type == EventType.Used) { _targetScript.GenerateBuilding(); }
             }
 
             // --- Draw Side Info ---
@@ -160,6 +161,79 @@ public class PolygonBuildingGeneratorEditor : Editor
         {
             Handles.DrawPolyLine(worldVertices);
             Handles.DrawLine(worldVertices[worldVertices.Length - 1], worldVertices[0]); // Close the loop
+        }
+
+        // --- Draw Roof Debug Gizmos ---
+        // Use the public debug data from the target script
+        if (_targetScript.generateSlopedRoof)
+        {
+            if (_targetScript._debugOuterRoofVertices != null && _targetScript._debugOuterRoofVertices.Count >= 3)
+            {
+                DrawRoofEdgeGizmos(_targetScript._debugOuterRoofVertices, Color.cyan, "Outer");
+            }
+            if (_targetScript._debugInnerRoofVertices != null && _targetScript._debugInnerRoofVertices.Count >= 3)
+            {
+                DrawRoofEdgeGizmos(_targetScript._debugInnerRoofVertices, Color.red, "Inner");
+            }
+            if (_targetScript._debugOuterRoofVertices != null && _targetScript._debugInnerRoofVertices != null && _targetScript._debugOuterRoofVertices.Count == _targetScript._debugInnerRoofVertices.Count)
+            {
+                Handles.color = Color.white;
+                for (int i = 0; i < _targetScript._debugOuterRoofVertices.Count; i++)
+                {
+                    Vector3 outerWorld = _targetTransform.TransformPoint(_targetScript._debugOuterRoofVertices[i]);
+                    Vector3 innerWorld = _targetTransform.TransformPoint(_targetScript._debugInnerRoofVertices[i]);
+                    Handles.DrawLine(outerWorld, innerWorld);
+                }
+            }
+            DrawMeshNormalsGizmos(_targetScript._debugSlopedRoofMesh, _targetScript._debugSlopedRoofTransform, Color.green);
+            if (_targetScript.generateRoofTopCap)
+            {
+                DrawMeshNormalsGizmos(_targetScript._debugRoofCapMesh, _targetScript._debugRoofCapTransform, Color.magenta);
+            }
+        }
+        else // Draw Flat Roof Gizmos
+        {
+            DrawMeshNormalsGizmos(_targetScript._debugFlatRoofMesh, _targetScript._debugFlatRoofTransform, Color.yellow);
+        }
+        // --- End Roof Debug Gizmos ---
+    }
+
+    // Helper to draw roof edge vertices and lines (Uses _targetTransform)
+    private void DrawRoofEdgeGizmos(List<Vector3> vertices, Color color, string labelPrefix)
+    {
+        Handles.color = color;
+        Vector3[] worldVertices = new Vector3[vertices.Count];
+        for (int i = 0; i < vertices.Count; i++)
+        {
+            worldVertices[i] = _targetTransform.TransformPoint(vertices[i]); // Use _targetTransform
+            Handles.Label(worldVertices[i] + Vector3.up * 0.1f, $"{labelPrefix} {i}");
+            Handles.SphereHandleCap(0, worldVertices[i], Quaternion.identity, 0.1f, EventType.Repaint);
+        }
+        Handles.DrawAAPolyLine(10.0f, worldVertices);
+        if (worldVertices.Length > 1)
+        {
+            Handles.DrawLine(worldVertices[worldVertices.Length - 1], worldVertices[0]);
+        }
+    }
+
+    // Helper to draw mesh normals (Uses meshTransform passed in)
+    private void DrawMeshNormalsGizmos(Mesh mesh, Transform meshTransform, Color color)
+    {
+        if (mesh == null || meshTransform == null || mesh.vertexCount == 0 || mesh.normals == null || mesh.normals.Length == 0) return; // Added null check for normals array
+
+        Handles.color = color;
+        Vector3[] verts = mesh.vertices;
+        Vector3[] normals = mesh.normals;
+        float gizmoLength = 0.5f;
+
+        for (int i = 0; i < verts.Length; i++)
+        {
+            // Check index validity for safety, though lengths should match if mesh is valid
+            if (i >= normals.Length) continue;
+
+            Vector3 worldPos = meshTransform.TransformPoint(verts[i]);
+            Vector3 worldNormal = meshTransform.TransformDirection(normals[i]);
+            Handles.DrawLine(worldPos, worldPos + worldNormal * gizmoLength);
         }
     }
 
@@ -210,9 +284,7 @@ public class PolygonBuildingGeneratorEditor : Editor
         if (_vertexDataProp.arraySize > 0)
         {
             Undo.RecordObject(_targetScript, "Remove Vertex");
-            _vertexDataProp.arraySize--; // Just decrease the size, element is removed
-                                         // Editor list sync should handle sideData, triggered by ApplyModifiedProperties / OnValidate
-                                         // _targetScript.SynchronizeSideData(); // Explicit sync just in case
+            _vertexDataProp.arraySize--;
         }
     }
 

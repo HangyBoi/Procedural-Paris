@@ -1,20 +1,16 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
-#if UNITY_EDITOR
-using UnityEditor; // Add this line
-#endif
 
 [RequireComponent(typeof(MeshFilter))]
 public class PolygonBuildingGenerator : MonoBehaviour
 {
     [Header("Polygon Definition")]
-    // Replace List<Vector3> with List<PolygonVertexData>
     public List<PolygonVertexData> vertexData = new List<PolygonVertexData>() {
-        new PolygonVertexData { position = new Vector3(0, 0, 0) },
-        new PolygonVertexData { position = new Vector3(0, 0, 5) },
-        new PolygonVertexData { position = new Vector3(5, 0, 5) },
-        new PolygonVertexData { position = new Vector3(5, 0, 0) }
+        new() { position = new Vector3(0, 0, 0) },
+        new() { position = new Vector3(0, 0, 5) },
+        new() { position = new Vector3(5, 0, 5) },
+        new() { position = new Vector3(5, 0, 0) }
     };
     public List<PolygonSideData> sideData = new List<PolygonSideData>();
     public float vertexSnapSize = 1.0f;
@@ -53,7 +49,6 @@ public class PolygonBuildingGenerator : MonoBehaviour
     public Material roofTopCapMaterial;
     public float roofUvScale = 1.0f;
 
-
     // --- Private Fields ---
     private GameObject generatedBuildingRoot;
     private const string ROOT_NAME = "Generated Building";
@@ -62,16 +57,16 @@ public class PolygonBuildingGenerator : MonoBehaviour
     private const string ROOF_FLAT_NAME = "Procedural Flat Roof";
     private const string ROOF_CAP_NAME = "Procedural Roof Cap";
 
-#if UNITY_EDITOR // Only include these in the editor
-    // Store calculated vertices for Gizmo drawing
-    private List<Vector3> _debugOuterRoofVertices;
-    private List<Vector3> _debugInnerRoofVertices;
-    private Mesh _debugSlopedRoofMesh;
-    private Mesh _debugFlatRoofMesh;
-    private Mesh _debugRoofCapMesh;
-    private Transform _debugSlopedRoofTransform;
-    private Transform _debugFlatRoofTransform;
-    private Transform _debugRoofCapTransform;
+#if UNITY_EDITOR
+    // --- Make Debug Data Public for Editor Access ---
+    [HideInInspector] public List<Vector3> _debugOuterRoofVertices;
+    [HideInInspector] public List<Vector3> _debugInnerRoofVertices;
+    [HideInInspector] public Mesh _debugSlopedRoofMesh;
+    [HideInInspector] public Mesh _debugFlatRoofMesh;
+    [HideInInspector] public Mesh _debugRoofCapMesh;
+    [HideInInspector] public Transform _debugSlopedRoofTransform;
+    [HideInInspector] public Transform _debugFlatRoofTransform;
+    [HideInInspector] public Transform _debugRoofCapTransform;
 #endif
 
     // --- Core Generation Logic ---
@@ -618,6 +613,21 @@ public class PolygonBuildingGenerator : MonoBehaviour
         return center;
     }
 
+    float CalculateSignedArea()
+    {
+        if (vertexData == null || vertexData.Count < 3) return 0f;
+
+        float area = 0f;
+        for (int i = 0; i < vertexData.Count; i++)
+        {
+            Vector3 p1 = vertexData[i].position;
+            Vector3 p2 = vertexData[(i + 1) % vertexData.Count].position; // Wrap around
+            // Shoelace formula component for XZ plane
+            area += (p1.x * p2.z) - (p2.x * p1.z);
+        }
+        return area / 2.0f;
+    }
+
     int CalculateNumSegments(float sideDistance)
     {
         int num = Mathf.Max(minSideLengthUnits, Mathf.RoundToInt(sideDistance / nominalFacadeWidth));
@@ -648,6 +658,49 @@ public class PolygonBuildingGenerator : MonoBehaviour
         }
         return sideNormal;
     }
+
+/*    Vector3 CalculateSideNormal(Vector3 p1, Vector3 p2, Vector3 polygonCenter *//*polygonCenter no longer needed here*//*)
+    {
+        Vector3 sideDirection = (p2 - p1).normalized;
+        if (sideDirection == Vector3.zero) return Vector3.forward; // Avoid issues with zero-length sides
+
+        // Calculate the perpendicular vector using cross product.
+        // This points "right" relative to sideDirection on the XZ plane.
+        Vector3 initialNormal = Vector3.Cross(sideDirection, Vector3.up).normalized;
+
+        // Determine the polygon's winding order based on signed area
+        float signedArea = CalculateSignedArea();
+
+        // Define what "outward" means based on winding order.
+        // Convention: Assume Counter-Clockwise (CCW) winding means outward is "left" (Cross(up, dir)),
+        // and Clockwise (CW) means outward is "right" (Cross(dir, up)).
+        // Our initialNormal IS Cross(dir, up), which is outward for CW.
+
+        if (signedArea > Mathf.Epsilon) // Polygon is Counter-Clockwise (Positive Area)
+        {
+            // initialNormal currently points "right" (inward for CCW). Flip it to point "left" (outward).
+            return -initialNormal;
+            // Alternatively, calculate the other cross product: return Vector3.Cross(Vector3.up, sideDirection).normalized;
+        }
+        else if (signedArea < -Mathf.Epsilon) // Polygon is Clockwise (Negative Area)
+        {
+            // initialNormal currently points "right" (outward for CW). Use it directly.
+            return initialNormal;
+        }
+        else
+        {
+            // Area is zero (collinear points or error). Fallback using the old center check or default.
+            // Let's fallback to the initial calculation, although this case shouldn't happen for valid polygons.
+            Debug.LogWarning("Polygon area is close to zero, normal calculation might be unreliable.");
+            return initialNormal;
+            // Old Center Check Fallback (if needed):
+            // Vector3 sideMidpoint = p1 + sideDirection * Vector3.Distance(p1, p2) / 2f;
+            // Vector3 centerToMidpoint = sideMidpoint - polygonCenter; centerToMidpoint.y = 0;
+            // Vector3 checkNormal = initialNormal; checkNormal.y=0;
+            // if (Vector3.Dot(checkNormal.normalized, centerToMidpoint.normalized) < -0.01f) return -initialNormal;
+            // else return initialNormal;
+        }
+    }*/
 
     // Ensure sideData list count matches vertexData list count
     // Call this from OnValidate or the editor script to keep things synced
@@ -685,103 +738,4 @@ public class PolygonBuildingGenerator : MonoBehaviour
         );
     }
 
-    // In PolygonBuildingGenerator.cs
-
-#if UNITY_EDITOR // Ensure Editor-only code
-    private void OnDrawGizmosSelected()
-    {
-        // --- Draw Base Polygon ---
-        if (vertexData != null && vertexData.Count >= 3)
-        {
-            Handles.color = Color.grey;
-            Vector3[] baseWorldVertices = new Vector3[vertexData.Count];
-            for (int i = 0; i < vertexData.Count; i++)
-            {
-                baseWorldVertices[i] = transform.TransformPoint(vertexData[i].position);
-            }
-            Handles.DrawAAPolyLine(5.0f, baseWorldVertices);
-            Handles.DrawLine(baseWorldVertices[baseWorldVertices.Length - 1], baseWorldVertices[0]); // Close loop
-        }
-
-        // --- Draw Sloped Roof Debug Info ---
-        if (generateSlopedRoof)
-        {
-            // Draw Outer Edge
-            if (_debugOuterRoofVertices != null && _debugOuterRoofVertices.Count >= 3)
-            {
-                DrawRoofEdgeGizmos(_debugOuterRoofVertices, Color.cyan, "Outer");
-            }
-
-            // Draw Inner Edge
-            if (_debugInnerRoofVertices != null && _debugInnerRoofVertices.Count >= 3)
-            {
-                DrawRoofEdgeGizmos(_debugInnerRoofVertices, Color.red, "Inner");
-            }
-
-            // Draw Connections
-            if (_debugOuterRoofVertices != null && _debugInnerRoofVertices != null && _debugOuterRoofVertices.Count == _debugInnerRoofVertices.Count)
-            {
-                Handles.color = Color.white;
-                for (int i = 0; i < _debugOuterRoofVertices.Count; i++)
-                {
-                    Vector3 outerWorld = transform.TransformPoint(_debugOuterRoofVertices[i]);
-                    Vector3 innerWorld = transform.TransformPoint(_debugInnerRoofVertices[i]);
-                    Handles.DrawLine(outerWorld, innerWorld);
-                }
-            }
-
-            // Draw Sloped Mesh Normals
-            DrawMeshNormalsGizmos(_debugSlopedRoofMesh, _debugSlopedRoofTransform, Color.green);
-
-            // Draw Roof Cap Mesh Normals
-            if (generateRoofTopCap)
-            {
-                DrawMeshNormalsGizmos(_debugRoofCapMesh, _debugRoofCapTransform, Color.magenta);
-            }
-        }
-        // --- Draw Flat Roof Debug Info ---
-        else
-        {
-            DrawMeshNormalsGizmos(_debugFlatRoofMesh, _debugFlatRoofTransform, Color.yellow);
-        }
-    }
-
-    // Helper to draw roof edge vertices and lines
-    private void DrawRoofEdgeGizmos(List<Vector3> vertices, Color color, string labelPrefix)
-    {
-        Handles.color = color;
-        Vector3[] worldVertices = new Vector3[vertices.Count];
-        for (int i = 0; i < vertices.Count; i++)
-        {
-            worldVertices[i] = transform.TransformPoint(vertices[i]);
-            Handles.Label(worldVertices[i] + Vector3.up * 0.1f, $"{labelPrefix} {i}");
-            Handles.SphereHandleCap(0, worldVertices[i], Quaternion.identity, 0.1f, EventType.Repaint);
-        }
-        // Draw connecting lines thicker
-        Handles.DrawAAPolyLine(10.0f, worldVertices);
-        if (worldVertices.Length > 1)
-        {
-            Handles.DrawLine(worldVertices[worldVertices.Length - 1], worldVertices[0]); // Close loop
-        }
-    }
-
-    // Helper to draw mesh normals
-    private void DrawMeshNormalsGizmos(Mesh mesh, Transform meshTransform, Color color)
-    {
-        if (mesh == null || meshTransform == null || mesh.vertexCount == 0 || mesh.normals.Length == 0) return;
-
-        Handles.color = color;
-        Vector3[] verts = mesh.vertices;
-        Vector3[] normals = mesh.normals;
-        float gizmoLength = 0.5f; // Adjust length as needed
-
-        for (int i = 0; i < verts.Length; i++)
-        {
-            Vector3 worldPos = meshTransform.TransformPoint(verts[i]);
-            Vector3 worldNormal = meshTransform.TransformDirection(normals[i]);
-            Handles.DrawLine(worldPos, worldPos + worldNormal * gizmoLength);
-        }
-    }
-
-#endif // UNITY_EDITOR
 }
