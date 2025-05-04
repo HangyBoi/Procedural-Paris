@@ -45,14 +45,14 @@ public class PolygonBuildingGenerator : MonoBehaviour
 
     [Header("Roof Settings")]
     public bool generateSlopedRoof = true;
-    public Material roofMaterial;
+    public bool generateRoofTopCap = true;
     public float roofSlopeHorizontalDistance = 2.0f;
     public float roofRiseHeight = 1.5f;
-    [Tooltip("Offset for flat roof vertices inwards/outwards. Negative values inset.")]
     public float flatRoofEdgeOffset = 0.0f;
-    public float roofUvScale = 1.0f;
-    public bool generateRoofTopCap = true;
+    public Material roofMaterial;
     public Material roofTopCapMaterial;
+    public float roofUvScale = 1.0f;
+
 
     // --- Private Fields ---
     private GameObject generatedBuildingRoot;
@@ -537,7 +537,7 @@ public class PolygonBuildingGenerator : MonoBehaviour
         float cornerY = floorHeight; // Ground
         cornerY += middleFloors * floorHeight; // Middle
         if (useMansardFloor) cornerY += floorHeight;
-        if (useAtticFloor) cornerY += floorHeight;
+        //if (useAtticFloor) cornerY += floorHeight;
         return cornerY;
     }
 
