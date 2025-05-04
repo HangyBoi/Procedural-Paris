@@ -1,18 +1,13 @@
 using UnityEngine;
-using System.Collections.Generic;
-using System; // Required for [Serializable]
+using System;
 
 [Serializable]
 public class PolygonSideData
 {
-    public bool overridePrefabs = false;
-    [Tooltip("If overriding, assign specific prefabs for this side.")]
-    public List<GameObject> groundFloorPrefabs;
-    public List<GameObject> middleFloorPrefabs;
-    public List<GameObject> mansardFloorPrefabs;
-    public List<GameObject> atticFloorPrefabs;
+    [Tooltip("Check this to use the assigned 'Side Style Preset' below for this side, instead of the generator's default prefabs.")]
+    public bool useCustomStyle = false;
 
-    // You could add more side-specific settings here later
-    // public bool specificHeightVariation = false;
-    // public int sideMiddleFloors = 3;
+    [Tooltip("Assign a Side Style Preset (Scriptable Object) to define prefabs for this side.")]
+    public SideStyleSO sideStylePreset;
+
 }

@@ -1,18 +1,16 @@
 #if UNITY_EDITOR
 using UnityEngine;
 using UnityEditor;
-using System.Collections.Generic;
 
 [CustomEditor(typeof(PolygonBuildingGenerator))]
 public class PolygonBuildingGeneratorEditor : Editor
 {
     private PolygonBuildingGenerator _targetScript;
     private Transform _targetTransform;
-
-    private SerializedProperty _vertexDataProp; // Use SerializedProperties for better list handling
+    private SerializedProperty _vertexDataProp;
     private SerializedProperty _sideDataProp;
 
-    private const float HANDLE_SIZE_MULTIPLIER = 0.1f;
+    private const float HANDLE_SIZE_MULTIPLIER = 0.2f;
 
     private void OnEnable()
     {
@@ -23,52 +21,41 @@ public class PolygonBuildingGeneratorEditor : Editor
         _vertexDataProp = serializedObject.FindProperty("vertexData");
         _sideDataProp = serializedObject.FindProperty("sideData");
 
-        // Initial sync if needed (OnValidate should handle most cases)
+        // Ensure initial sync
         _targetScript.SynchronizeSideData();
-        EditorUtility.SetDirty(_targetScript); // Mark dirty if sync modified it
+        if (!Application.isPlaying) EditorUtility.SetDirty(_targetScript);
     }
 
     public override void OnInspectorGUI()
     {
-        serializedObject.Update(); // Start
+        serializedObject.Update();
 
-        // --- Use DrawPropertiesExcluding ---
-        // List all the properties we are handling MANUALLY later in the Inspector GUI
+        // Draw default fields EXCEPT the ones we handle manually
         string[] propertiesToExclude = new string[] {
-            "m_Script", // Always exclude the script field itself
-            "vertexData",
-            "sideData"
-            // Add any other fields you might draw manually later
+            "m_Script", "vertexData", "sideData"
         };
-        // Draw all properties *except* the ones listed above
         DrawPropertiesExcluding(serializedObject, propertiesToExclude);
-        // ---
 
-        // No need for the second EditorGUILayout.LabelField("Polygon Definition")
-
+        // Polygon's Vertices Data
         EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Polygon Data", EditorStyles.boldLabel); // Use a more specific title
-
-        // --- Vertex Data List ---
+        EditorGUILayout.LabelField("Polygon Data", EditorStyles.boldLabel);
         EditorGUILayout.PropertyField(_vertexDataProp, true);
 
         // --- Side Data List (Overrides) ---
         EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Per-Side Prefab Overrides", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("Per-Side Style Overrides", EditorStyles.boldLabel);
         EditorGUI.indentLevel++;
         if (_vertexDataProp.arraySize != _sideDataProp.arraySize)
         {
             EditorGUILayout.HelpBox("Vertex and Side data count mismatch! Regenerating or changing vertex count might fix this.", MessageType.Warning);
-            // Avoid forceful sync here, let user action or OnValidate handle it
-            // _targetScript.SynchronizeSideData();
         }
-        else if (_sideDataProp != null) // Add null check
+        else if (_sideDataProp != null)
         {
-            EditorGUILayout.PropertyField(_sideDataProp, true); // Draw the sideData list
+            EditorGUILayout.PropertyField(_sideDataProp, true);
         }
         EditorGUI.indentLevel--;
 
-        // --- Polygon Editing Buttons ---
+        // --- Polygon Editing Tools ---
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("Polygon Editing Tools", EditorStyles.boldLabel);
         EditorGUILayout.BeginHorizontal();
@@ -90,7 +77,7 @@ public class PolygonBuildingGeneratorEditor : Editor
         EditorGUI.EndDisabledGroup();
         EditorGUILayout.EndHorizontal();
 
-        // --- Generation Buttons (Moved down for better flow) ---
+        // --- Generation Buttons ---
         EditorGUILayout.Space();
         if (GUILayout.Button("Generate Building"))
         {
@@ -109,8 +96,6 @@ public class PolygonBuildingGeneratorEditor : Editor
         // Apply changes at the end
         if (serializedObject.ApplyModifiedProperties())
         {
-            // OnValidate should handle sync if properties like vertex count change directly
-            // _targetScript.SynchronizeSideData(); // Redundant if OnValidate works
             EditorUtility.SetDirty(_targetScript);
             SceneView.RepaintAll();
         }
