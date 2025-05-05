@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c27488ae75dcc904291108897504224d, type: 3}
+  m_Name: White Bricks Side
+  m_EditorClassIdentifier: 
+  groundFloorPrefabs:
+  - {fileID: 8708220564727177831, guid: 8b0764e68e330714caff9558e3ea3810, type: 3}
+  - {fileID: 840262431670485971, guid: bef49a7f1b448bc4695929a31771cb2b, type: 3}
+  - {fileID: 840262431670485971, guid: aa74bb2364622284ba1cc00d56aec33d, type: 3}
+  - {fileID: 5768072877802017965, guid: 19008e196509eca4e811823e83ce4b01, type: 3}
+  middleFloorPrefabs:
+  - {fileID: 5506069721255099197, guid: 93c8c7cc47ad47a4691697f5caac2bfa, type: 3}
+  - {fileID: 2037035238946278173, guid: 0b3dbfb233be721438f86d90a2f55459, type: 3}
+  - {fileID: 3037907641868205952, guid: 60110b24bf8915e418ef28729c2edec0, type: 3}
+  mansardFloorPrefabs:
+  - {fileID: 4794097862798657804, guid: a008a730605ad8540825dec5d28487ee, type: 3}
+  atticFloorPrefabs:
+  - {fileID: 2936507998635124413, guid: 979b7f3008fcff843bb5a78a6b225c0a, type: 3}
