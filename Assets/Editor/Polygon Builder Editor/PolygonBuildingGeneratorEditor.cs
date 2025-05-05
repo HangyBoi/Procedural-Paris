@@ -148,7 +148,10 @@ public class PolygonBuildingGeneratorEditor : Editor
                 serializedObject.ApplyModifiedProperties(); // Apply the change
                 EditorUtility.SetDirty(_targetScript);
                 // Optional real-time update (can be slow)
-                if (Event.current.type == EventType.Used) { _targetScript.GenerateBuilding(); }
+                if (Event.current.type == EventType.Used) 
+                {
+                    _targetScript.GenerateBuilding(); 
+                }
             }
 
             // --- Draw Side Info ---

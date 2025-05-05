@@ -127,7 +127,7 @@ public class PolygonBuildingGenerator : MonoBehaviour
             if (sideDistance < 0.01f) continue;
             Vector3 sideDirection = sideVector.normalized;
 
-            Vector3 sideNormal = CalculateSideNormal(p1, p2, polygonCenter);
+            Vector3 sideNormal = CalculateSideNormal(p1, p2);
             int numSegments = CalculateNumSegments(sideDistance);
             float actualSegmentWidth = CalculateSegmentWidth(sideDistance, numSegments);
             int currentMiddleFloors = sideMiddleFloors[i];
@@ -236,16 +236,54 @@ public class PolygonBuildingGenerator : MonoBehaviour
     void GenerateRoofMesh_Flat(int[] sideMiddleFloors, Vector3 polygonCenter)
     {
         List<Vector3> roofVertices = CalculateRoofPerimeterVertices(sideMiddleFloors, polygonCenter, flatRoofEdgeOffset);
-        if (roofVertices == null || roofVertices.Count < 3) return;
-        GenerateFanMeshData(roofVertices, out List<Vector3> meshVertices, out List<int> meshTriangles, out List<Vector2> meshUVs);
+        if (roofVertices == null || roofVertices.Count < 3)
+        {
+            Debug.LogWarning("Cannot generate flat roof: Less than 3 perimeter vertices calculated.");
+            return;
+        }
+
+        //GenerateFanMeshData(roofVertices, out List<Vector3> meshVertices, out List<int> meshTriangles, out List<Vector2> meshUVs);
+        //GameObject roofObject = CreateMeshObject(meshVertices, meshTriangles, meshUVs, roofMaterial, "FlatRoofMesh", ROOF_FLAT_NAME, generatedBuildingRoot.transform);
+
+        // --- Triangulate using Ear Clipping ---
+        List<int> meshTriangles;
+        // Call the triangulation function (assuming it's in GeometryUtils)
+        if (!GeometryUtils.TriangulatePolygonEarClipping(roofVertices, out meshTriangles))
+        {
+            Debug.LogError("Flat Roof triangulation failed. Aborting roof generation.");
+            // Clear debug data related to flat roof if needed
+#if UNITY_EDITOR
+            _debugFlatRoofMesh = null;
+            _debugFlatRoofTransform = null;
+#endif
+            return; // Stop generation if triangulation failed
+        }
+
+        // Vertices are just the perimeter vertices themselves
+        List<Vector3> meshVertices = roofVertices;
+
+        // Calculate UVs (Simple Planar Projection - Same as before)
+        List<Vector2> meshUVs = new List<Vector2>(meshVertices.Count);
+        foreach (Vector3 v in meshVertices)
+        {
+            meshUVs.Add(new Vector2(v.x * roofUvScale, v.z * roofUvScale));
+        }
 
         // Create GameObject and store mesh/transform for Gizmos
         GameObject roofObject = CreateMeshObject(meshVertices, meshTriangles, meshUVs, roofMaterial, "FlatRoofMesh", ROOF_FLAT_NAME, generatedBuildingRoot.transform);
 
+
 #if UNITY_EDITOR
-        _debugFlatRoofMesh = roofObject.GetComponent<MeshFilter>()?.sharedMesh; // Use sharedMesh in editor
-        _debugFlatRoofTransform = roofObject.transform;
-        // Clear other debug lists if switching modes
+        if (roofObject != null) // Check if object creation succeeded
+        {
+            _debugFlatRoofMesh = roofObject.GetComponent<MeshFilter>()?.sharedMesh; // Use sharedMesh in editor
+            _debugFlatRoofTransform = roofObject.transform;
+        }
+        else
+        {
+            _debugFlatRoofMesh = null;
+            _debugFlatRoofTransform = null;
+        }
         _debugOuterRoofVertices = null;
         _debugInnerRoofVertices = null;
         _debugSlopedRoofMesh = null;
@@ -263,7 +301,7 @@ public class PolygonBuildingGenerator : MonoBehaviour
 
 #if UNITY_EDITOR
         // Store vertices for Gizmos *before* generating mesh
-        _debugOuterRoofVertices = new List<Vector3>(outerVertices); // Make copies
+        _debugOuterRoofVertices = new List<Vector3>(outerVertices);
         _debugInnerRoofVertices = new List<Vector3>(innerVertices);
         // Clear flat roof debug info
         _debugFlatRoofMesh = null;
@@ -276,22 +314,73 @@ public class PolygonBuildingGenerator : MonoBehaviour
         GameObject slopedRoofObject = CreateMeshObject(meshVertices, meshTriangles, meshUVs, roofMaterial, "SlopedRoofMesh", ROOF_SLOPED_NAME, generatedBuildingRoot.transform);
 
 #if UNITY_EDITOR
-        _debugSlopedRoofMesh = slopedRoofObject.GetComponent<MeshFilter>()?.sharedMesh;
-        _debugSlopedRoofTransform = slopedRoofObject.transform;
+        if (slopedRoofObject != null)
+        {
+            _debugSlopedRoofMesh = slopedRoofObject.GetComponent<MeshFilter>()?.sharedMesh;
+            _debugSlopedRoofTransform = slopedRoofObject.transform;
+        }
+        else
+        {
+            _debugSlopedRoofMesh = null;
+            _debugSlopedRoofTransform = null;
+        }
 #endif
 
+        // Generate the top cap using Ear Clipping
         if (generateRoofTopCap && innerVertices.Count >= 3)
         {
-            GenerateFanMeshData(innerVertices, out List<Vector3> capVertices, out List<int> capTriangles, out List<Vector2> capUVs, true);
-            GameObject capObject = CreateMeshObject(capVertices, capTriangles, capUVs, roofTopCapMaterial ?? roofMaterial, "RoofCapMesh", ROOF_CAP_NAME, generatedBuildingRoot.transform);
+            // --- Triangulate the inner loop using Ear Clipping ---
+            List<int> capTriangles;
+            // Use the *inner* vertices for the cap
+            if (!GeometryUtils.TriangulatePolygonEarClipping(innerVertices, out capTriangles))
+            {
+                Debug.LogError("Roof Cap triangulation failed.");
 #if UNITY_EDITOR
-            _debugRoofCapMesh = capObject.GetComponent<MeshFilter>()?.sharedMesh;
-            _debugRoofCapTransform = capObject.transform;
+                _debugRoofCapMesh = null;
+                _debugRoofCapTransform = null;
 #endif
+                // Optionally decide whether to stop or just skip the cap
+            }
+            else
+            {
+                // Vertices are the inner vertices
+                List<Vector3> capVertices = innerVertices;
+
+                // Calculate UVs for the cap (Planar projection)
+                List<Vector2> capUVs = new List<Vector2>(capVertices.Count);
+                // Optional: Project UVs relative to the cap's center for better distribution
+                Vector3 capCenter = Vector3.zero;
+                foreach (var v in capVertices) capCenter += v;
+                capCenter /= capVertices.Count;
+
+                foreach (Vector3 v in capVertices)
+                {
+                    // UVs relative to center can look better than absolute world coords
+                    capUVs.Add(new Vector2((v.x - capCenter.x) * roofUvScale, (v.z - capCenter.z) * roofUvScale) + new Vector2(0.5f, 0.5f));
+                    // Or stick to world projection:
+                    // capUVs.Add(new Vector2(v.x * roofUvScale, v.z * roofUvScale));
+                }
+
+                // Create the cap object
+                GameObject capObject = CreateMeshObject(capVertices, capTriangles, capUVs, roofTopCapMaterial ?? roofMaterial, "RoofCapMesh", ROOF_CAP_NAME, generatedBuildingRoot.transform);
+
+#if UNITY_EDITOR
+                if (capObject != null)
+                {
+                    _debugRoofCapMesh = capObject.GetComponent<MeshFilter>()?.sharedMesh;
+                    _debugRoofCapTransform = capObject.transform;
+                }
+                else
+                {
+                    _debugRoofCapMesh = null;
+                    _debugRoofCapTransform = null;
+                }
+#endif
+            }
         }
 #if UNITY_EDITOR
-        else
-        { // Ensure cap debug info is cleared if cap isn't generated
+        else if (!generateRoofTopCap) // Ensure cap debug info is cleared if cap isn't generated
+        {
             _debugRoofCapMesh = null;
             _debugRoofCapTransform = null;
         }
@@ -304,40 +393,51 @@ public class PolygonBuildingGenerator : MonoBehaviour
     List<Vector3> CalculateRoofPerimeterVertices(int[] sideMiddleFloors, Vector3 polygonCenter, float edgeOffset)
     {
         List<Vector3> vertices = new List<Vector3>();
+        if (vertexData.Count < 3) return vertices; // Need at least 3 vertices
+
         for (int i = 0; i < vertexData.Count; i++)
         {
             int prevI = (i + vertexData.Count - 1) % vertexData.Count;
             Vector3 p1 = vertexData[prevI].position;
-            Vector3 p2 = vertexData[i].position;
+            Vector3 p2 = vertexData[i].position; // The current corner vertex
             Vector3 p3 = vertexData[(i + 1) % vertexData.Count].position;
 
+            // Calculate side directions and normals
             Vector3 sideDirPrev = (p2 - p1).normalized;
             Vector3 sideDirNext = (p3 - p2).normalized;
-            Vector3 normalPrev = CalculateSideNormal(p1, p2, polygonCenter);
-            Vector3 normalNext = CalculateSideNormal(p2, p3, polygonCenter);
+            // Ensure normals point outwards consistently using your existing method
+            Vector3 normalPrev = CalculateSideNormal(p1, p2);
+            Vector3 normalNext = CalculateSideNormal(p2, p3);
 
             Vector3 vertexPosXZ;
-            // Find intersection of offset lines
-            if (Mathf.Abs(edgeOffset) > 0.01f) // Only intersect if offset exists
+
+            // --- Consistent Offset Logic using Line Intersection ---
+            if (Mathf.Abs(edgeOffset) > 0.01f) // If there IS an offset (positive or negative)
             {
+                // Define the two lines, offset by edgeOffset along their normals
                 Vector3 lineOriginPrev = p1 + normalPrev * edgeOffset;
                 Vector3 lineOriginNext = p2 + normalNext * edgeOffset;
-                if (!GeometryUtils.LineLineIntersection(lineOriginPrev, sideDirPrev, lineOriginNext, sideDirNext, out vertexPosXZ))
+
+                // Find the intersection point of these two offset lines
+                if (GeometryUtils.LineLineIntersection(lineOriginPrev, sideDirPrev, lineOriginNext, sideDirNext, out vertexPosXZ))
                 {
-                    // Fallback for parallel lines
+                    // Intersection found, use it.
+                }
+                else // Fallback for parallel or nearly parallel lines
+                {
                     Vector3 avgNormal = (normalPrev + normalNext).normalized;
-                    if (avgNormal == Vector3.zero) avgNormal = normalPrev;
+                    if (avgNormal.sqrMagnitude < GeometryUtils.Epsilon * GeometryUtils.Epsilon) avgNormal = Quaternion.Euler(0, 90, 0) * sideDirPrev; // Handle 180 degree turn
                     vertexPosXZ = p2 + avgNormal * edgeOffset;
                 }
             }
-            else
+            else // No offset (edgeOffset is effectively zero)
             {
-                vertexPosXZ = p2; // No offset, use original vertex XZ
+                vertexPosXZ = p2; // Use the original vertex XZ position
             }
 
-            // Calculate height
+            // Calculate height (remains the same)
             int cornerMiddleFloors = Mathf.Max(sideMiddleFloors[prevI], sideMiddleFloors[i]);
-            float cornerY = CalculateCornerHeight(cornerMiddleFloors);
+            float cornerY = CalculateCornerHeight(cornerMiddleFloors); // Make sure this calculates the top of the wall correctly
 
             vertices.Add(new Vector3(vertexPosXZ.x, cornerY, vertexPosXZ.z));
         }
@@ -368,8 +468,8 @@ public class PolygonBuildingGenerator : MonoBehaviour
             // Inner Vertex (Horizontal offset, calculated height + rise)
             Vector3 sideDirPrev = (p2_base - p1_base).normalized;
             Vector3 sideDirNext = (p3_base - p2_base).normalized;
-            Vector3 normalPrev = CalculateSideNormal(p1_base, p2_base, polygonCenter);
-            Vector3 normalNext = CalculateSideNormal(p2_base, p3_base, polygonCenter);
+            Vector3 normalPrev = CalculateSideNormal(p1_base, p2_base);
+            Vector3 normalNext = CalculateSideNormal(p2_base, p3_base);
 
             Vector3 innerVertexPosXZ;
             // *** FIX: Subtract offset distance to move inwards ***
@@ -453,11 +553,11 @@ public class PolygonBuildingGenerator : MonoBehaviour
 
             // Correct Winding for Triangle 1: currentOuter, nextInner, nextOuter
 
-            meshTriangles.Add(currentOuter); meshTriangles.Add(nextOuter); meshTriangles.Add(nextInner); 
+            meshTriangles.Add(currentOuter); meshTriangles.Add(nextOuter); meshTriangles.Add(nextInner);
 
             // Correct Winding for Triangle 2: currentOuter, currentInner, nextInner
 
-            meshTriangles.Add(currentOuter); meshTriangles.Add(nextInner); meshTriangles.Add(currentInner); 
+            meshTriangles.Add(currentOuter); meshTriangles.Add(nextInner); meshTriangles.Add(currentInner);
         }
     }
 
@@ -487,8 +587,8 @@ public class PolygonBuildingGenerator : MonoBehaviour
 
     void CalculateCornerTransform(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 polygonCenter, out Vector3 cornerPos, out Quaternion cornerRot)
     {
-        Vector3 sideNormalPrev = CalculateSideNormal(p1, p2, polygonCenter);
-        Vector3 sideNormalNext = CalculateSideNormal(p2, p3, polygonCenter);
+        Vector3 sideNormalPrev = CalculateSideNormal(p1, p2);
+        Vector3 sideNormalNext = CalculateSideNormal(p2, p3);
 
         Vector3 avgNormal = (sideNormalPrev + sideNormalNext).normalized;
         if (avgNormal == Vector3.zero) avgNormal = sideNormalNext; // Fallback
@@ -644,63 +744,46 @@ public class PolygonBuildingGenerator : MonoBehaviour
         return scaleFacadesToFitSide ? (sideDistance / numSegments) : nominalFacadeWidth;
     }
 
-    Vector3 CalculateSideNormal(Vector3 p1, Vector3 p2, Vector3 polygonCenter)
-    {
-        Vector3 sideDirection = (p2 - p1).normalized;
-        Vector3 sideNormal = Vector3.Cross(sideDirection, Vector3.up).normalized;
-        Vector3 sideMidpoint = p1 + sideDirection * Vector3.Distance(p1, p2) / 2f;
-        Vector3 centerToMidpoint = sideMidpoint - polygonCenter;
-        centerToMidpoint.y = 0;
-        Vector3 checkNormal = sideNormal; checkNormal.y = 0;
-        if (Vector3.Dot(checkNormal.normalized, centerToMidpoint.normalized) < -0.01f)
+    /*    Vector3 CalculateSideNormal(Vector3 p1, Vector3 p2, Vector3 polygonCenter)
         {
-            sideNormal *= -1;
-        }
-        return sideNormal;
-    }
+            Vector3 sideDirection = (p2 - p1).normalized;
+            Vector3 sideNormal = Vector3.Cross(sideDirection, Vector3.up).normalized;
+            Vector3 sideMidpoint = p1 + sideDirection * Vector3.Distance(p1, p2) / 2f;
+            Vector3 centerToMidpoint = sideMidpoint - polygonCenter;
+            centerToMidpoint.y = 0;
+            Vector3 checkNormal = sideNormal; checkNormal.y = 0;
+            if (Vector3.Dot(checkNormal.normalized, centerToMidpoint.normalized) < -0.01f)
+            {
+                sideNormal *= -1;
+            }
+            return sideNormal;
+        }*/
 
-/*    Vector3 CalculateSideNormal(Vector3 p1, Vector3 p2, Vector3 polygonCenter *//*polygonCenter no longer needed here*//*)
+    Vector3 CalculateSideNormal(Vector3 p1, Vector3 p2) // Removed polygonCenter parameter
     {
         Vector3 sideDirection = (p2 - p1).normalized;
-        if (sideDirection == Vector3.zero) return Vector3.forward; // Avoid issues with zero-length sides
+        if (sideDirection == Vector3.zero) return Vector3.forward;
 
-        // Calculate the perpendicular vector using cross product.
-        // This points "right" relative to sideDirection on the XZ plane.
+        // Normal pointing "right" of direction on XZ plane
         Vector3 initialNormal = Vector3.Cross(sideDirection, Vector3.up).normalized;
-
-        // Determine the polygon's winding order based on signed area
         float signedArea = CalculateSignedArea();
 
-        // Define what "outward" means based on winding order.
-        // Convention: Assume Counter-Clockwise (CCW) winding means outward is "left" (Cross(up, dir)),
-        // and Clockwise (CW) means outward is "right" (Cross(dir, up)).
-        // Our initialNormal IS Cross(dir, up), which is outward for CW.
-
-        if (signedArea > Mathf.Epsilon) // Polygon is Counter-Clockwise (Positive Area)
+        // If CCW (positive area), outward is "left", so flip the initial "right" normal.
+        if (signedArea > Mathf.Epsilon)
         {
-            // initialNormal currently points "right" (inward for CCW). Flip it to point "left" (outward).
             return -initialNormal;
-            // Alternatively, calculate the other cross product: return Vector3.Cross(Vector3.up, sideDirection).normalized;
         }
-        else if (signedArea < -Mathf.Epsilon) // Polygon is Clockwise (Negative Area)
-        {
-            // initialNormal currently points "right" (outward for CW). Use it directly.
-            return initialNormal;
-        }
+        // If CW (negative area), outward is "right", use initial normal.
+        // Also handles zero area case by falling back to initial normal.
         else
         {
-            // Area is zero (collinear points or error). Fallback using the old center check or default.
-            // Let's fallback to the initial calculation, although this case shouldn't happen for valid polygons.
-            Debug.LogWarning("Polygon area is close to zero, normal calculation might be unreliable.");
+            if (Mathf.Abs(signedArea) < Mathf.Epsilon)
+            {
+                Debug.LogWarning("Polygon area is close to zero, normal calculation might be unreliable.");
+            }
             return initialNormal;
-            // Old Center Check Fallback (if needed):
-            // Vector3 sideMidpoint = p1 + sideDirection * Vector3.Distance(p1, p2) / 2f;
-            // Vector3 centerToMidpoint = sideMidpoint - polygonCenter; centerToMidpoint.y = 0;
-            // Vector3 checkNormal = initialNormal; checkNormal.y=0;
-            // if (Vector3.Dot(checkNormal.normalized, centerToMidpoint.normalized) < -0.01f) return -initialNormal;
-            // else return initialNormal;
         }
-    }*/
+    }
 
     // Ensure sideData list count matches vertexData list count
     // Call this from OnValidate or the editor script to keep things synced
