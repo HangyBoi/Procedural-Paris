@@ -15,8 +15,11 @@ MonoBehaviour:
   groundFloorPrefabs:
   - {fileID: 3435898480930570988, guid: 26b6b37f1cd453f498ad414b0f3473d7, type: 3}
   - {fileID: 840262431670485971, guid: aa74bb2364622284ba1cc00d56aec33d, type: 3}
+  - {fileID: 840262431670485971, guid: bef49a7f1b448bc4695929a31771cb2b, type: 3}
+  - {fileID: 5768072877802017965, guid: 19008e196509eca4e811823e83ce4b01, type: 3}
   middleFloorPrefabs:
-  - {fileID: 5506069721255099197, guid: b901b5c1d04923042b858b12210f165e, type: 3}
+  - {fileID: 2037035238946278173, guid: ebca4da9fcefaa34abff93b753210504, type: 3}
+  - {fileID: 3037907641868205952, guid: 748a769409a4d714e92fae0705b78850, type: 3}
   mansardFloorPrefabs:
   - {fileID: 4794097862798657804, guid: a008a730605ad8540825dec5d28487ee, type: 3}
   atticFloorPrefabs:

@@ -158,7 +158,7 @@ MonoBehaviour:
   DefaultPreset: " <sbspreset pkgurl=\"pkg://BricksOnly_2\" label=\"\" >\n  <presetinput
     identifier=\"$outputsize\" uid=\"1460012604\" type=\"8\" value=\"10,10\" />\n
     </sbspreset>\n"
-  MaterialShader: HDRP/LitTessellation
+  MaterialShader: HDRP/Lit
   RenderTextures: 0
   OutputRemaped: 0
   Presets: []
