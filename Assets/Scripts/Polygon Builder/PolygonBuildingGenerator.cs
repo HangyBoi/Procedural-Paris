@@ -19,6 +19,8 @@ public class PolygonBuildingGenerator : MonoBehaviour
     [Header("Building Settings")]
     public int middleFloors = 3;
     public float floorHeight = 3.0f;
+    public bool useMansardFloor = true;
+    public bool useAtticFloor = true;
     public bool allowHeightVariation = false;
     [Range(0, 5)] public int maxHeightVariation = 1;
 
@@ -36,19 +38,6 @@ public class PolygonBuildingGenerator : MonoBehaviour
     public List<GameObject> cornerElementPrefabs;
     public List<GameObject> cornerCapPrefabs;
     public float cornerElementForwardOffset = 0.0f;
-
-    [Header("Mansard/Attic Settings")]
-    [Tooltip("Enable generating a procedural mesh for the Mansard level.")]
-    public bool useMansardFloor = true; // Keep this if you want to toggle it
-    public Material mansardMaterial;
-    public float mansardSlopeHorizontalDistance = 1.5f;
-    public float mansardRiseHeight = 2.0f;
-
-    [Tooltip("Enable generating a procedural mesh for the Attic level (builds on Mansard or wall).")]
-    public bool useAtticFloor = true; // Keep this too
-    public Material atticMaterial;
-    public float atticSlopeHorizontalDistance = 1.0f;
-    public float atticRiseHeight = 1.5f;
 
     [Header("Roof Settings")]
     public bool generateSlopedRoof = true;
@@ -168,7 +157,7 @@ public class PolygonBuildingGenerator : MonoBehaviour
                     currentY += floorHeight;
                 }
 
-/*                // Mansard Floor for this segment (if used)
+                // Mansard Floor for this segment (if used)
                 if (useMansardFloor)
                 {
                     InstantiateFacadeSegment(currentMansard, segmentBasePos + Vector3.up * currentY, segmentRotation, sideParent.transform, actualSegmentWidth);
@@ -180,7 +169,7 @@ public class PolygonBuildingGenerator : MonoBehaviour
                 {
                     InstantiateFacadeSegment(currentAttic, segmentBasePos + Vector3.up * currentY, segmentRotation, sideParent.transform, actualSegmentWidth);
                     // No Y increment after the top floor
-                }*/
+                }
             }
         }
     }
@@ -231,141 +220,17 @@ public class PolygonBuildingGenerator : MonoBehaviour
         }
     }
 
-    void GenerateRoof(int[] sideMiddleFloors, Vector3 polygonCenter) // Use the original sideMiddleFloors reflecting variation
+    void GenerateRoof(int[] sideMiddleFloors, Vector3 polygonCenter)
     {
-        if (vertexData.Count < 3) return;
-
-        // --- Calculate the Initial Outer Perimeter at ACTUAL Wall Top Heights ---
-        // Pass the *original* sideMiddleFloors array which accounts for height variation.
-        // CalculateRoofPerimeterVertices uses CalculateCornerHeight internally for each vertex,
-        // using the Max height of adjacent sides, resulting in a loop matching the wall tops.
-        List<Vector3> currentOuterEdgeLoop = CalculateRoofPerimeterVertices(sideMiddleFloors, polygonCenter, 0.0f); // Offset 0
-
-        if (currentOuterEdgeLoop == null || currentOuterEdgeLoop.Count < 3)
-        {
-            Debug.LogError("Failed to calculate initial roof base perimeter at actual heights.");
-            return;
-        }
-
-        // The loop 'currentOuterEdgeLoop' now has vertices potentially at different Y levels,
-        // matching the top of the walls below.
-
-        // --- The rest of the function proceeds using this loop as the base ---
-
-        List<Vector3> previousOuterEdgeLoop = new List<Vector3>(currentOuterEdgeLoop); // Keep track for debug info (optional)
-
-        // --- Generate Mansard Floor Mesh (if enabled) ---
-        List<Vector3> innerMansardEdgeLoop = null;
-        if (useMansardFloor && mansardSlopeHorizontalDistance > GeometryUtils.Epsilon)
-        {
-            // CalculateInnerRoofEdge will correctly handle varying Y in currentOuterEdgeLoop
-            innerMansardEdgeLoop = CalculateInnerRoofEdge(currentOuterEdgeLoop, mansardSlopeHorizontalDistance, mansardRiseHeight);
-
-            if (innerMansardEdgeLoop != null && innerMansardEdgeLoop.Count >= 3)
-            {
-                // GenerateStripMeshData connects the varying height loops correctly
-                GenerateStripMeshData(currentOuterEdgeLoop, innerMansardEdgeLoop, out var meshVertices, out var meshTriangles, out var meshUVs);
-                Material mat = mansardMaterial ?? roofMaterial; // Fallback material
-                CreateMeshObject(meshVertices, meshTriangles, meshUVs, mat, "MansardFloorMesh", "Procedural Mansard Floor", generatedBuildingRoot.transform);
-
-                currentOuterEdgeLoop = innerMansardEdgeLoop; // Update the loop for the next stage
-            }
-            else
-            {
-                Debug.LogWarning("Failed to calculate inner mansard edge loop or not enough vertices, skipping mansard mesh generation.");
-                useMansardFloor = false; // Prevent trying to use it if calc failed
-            }
-        }
-
-        // --- Generate Attic Floor Mesh (if enabled) ---
-        List<Vector3> innerAtticEdgeLoop = null;
-        if (useAtticFloor && atticSlopeHorizontalDistance > GeometryUtils.Epsilon)
-        {
-            innerAtticEdgeLoop = CalculateInnerRoofEdge(currentOuterEdgeLoop, atticSlopeHorizontalDistance, atticRiseHeight);
-
-            if (innerAtticEdgeLoop != null && innerAtticEdgeLoop.Count >= 3)
-            {
-                GenerateStripMeshData(currentOuterEdgeLoop, innerAtticEdgeLoop, out var meshVertices, out var meshTriangles, out var meshUVs);
-                Material mat = atticMaterial ?? roofMaterial; // Fallback material
-                CreateMeshObject(meshVertices, meshTriangles, meshUVs, mat, "AtticFloorMesh", "Procedural Attic Floor", generatedBuildingRoot.transform);
-
-                currentOuterEdgeLoop = innerAtticEdgeLoop; // Update the loop for the final roof stage
-            }
-            else
-            {
-                Debug.LogWarning("Failed to calculate inner attic edge loop or not enough vertices, skipping attic mesh generation.");
-                useAtticFloor = false; // Prevent trying to use it if calc failed
-            }
-        }
-
-        // --- Generate Final Top Roof (Sloped or Flat) ---
-        // Builds on the latest 'currentOuterEdgeLoop' which now sits correctly on the (potentially varied height) walls
-
         if (generateSlopedRoof)
         {
-            List<Vector3> finalInnerLoop = CalculateInnerRoofEdge(currentOuterEdgeLoop, roofSlopeHorizontalDistance, roofRiseHeight);
-
-            if (finalInnerLoop != null && finalInnerLoop.Count >= 3)
-            {
-                GenerateStripMeshData(currentOuterEdgeLoop, finalInnerLoop, out var meshVertices, out var meshTriangles, out var meshUVs);
-                GameObject slopedRoofObj = CreateMeshObject(meshVertices, meshTriangles, meshUVs, roofMaterial, "SlopedRoofMesh", ROOF_SLOPED_NAME, generatedBuildingRoot.transform);
-#if UNITY_EDITOR
-                _debugOuterRoofVertices = new List<Vector3>(currentOuterEdgeLoop);
-                _debugInnerRoofVertices = new List<Vector3>(finalInnerLoop);
-                _debugSlopedRoofMesh = slopedRoofObj?.GetComponent<MeshFilter>()?.sharedMesh;
-                _debugSlopedRoofTransform = slopedRoofObj?.transform;
-                ClearFlatRoofDebug(); // Clear other types
-                ClearRoofCapDebug();
-#endif
-
-                if (generateRoofTopCap && finalInnerLoop.Count >= 3)
-                {
-                    if (GeometryUtils.TriangulatePolygonEarClipping(finalInnerLoop, out var capTriangles))
-                    {
-                        List<Vector2> capUVs = CalculatePlanarUVs(finalInnerLoop);
-                        GameObject capObj = CreateMeshObject(finalInnerLoop, capTriangles, capUVs, roofTopCapMaterial ?? roofMaterial, "RoofCapMesh", ROOF_CAP_NAME, generatedBuildingRoot.transform);
-#if UNITY_EDITOR
-                        _debugRoofCapMesh = capObj?.GetComponent<MeshFilter>()?.sharedMesh;
-                        _debugRoofCapTransform = capObj?.transform;
-#endif
-                    }
-                    else { Debug.LogError("Roof Cap triangulation failed."); ClearRoofCapDebug(); }
-                }
-                else { ClearRoofCapDebug(); }
-            }
-            else { Debug.LogWarning("Failed to calculate final inner roof loop for sloped roof."); ClearSlopedRoofDebug(); ClearRoofCapDebug(); }
+            GenerateRoofMesh_Sloped(sideMiddleFloors, polygonCenter);
         }
-        else // Generate Flat Roof
+        else
         {
-            List<Vector3> flatRoofVertices = currentOuterEdgeLoop; // Use the final edge loop which sits on walls
-
-            // Apply flatRoofEdgeOffset *relative* to this potentially non-planar loop if desired.
-            // For simplicity, we'll triangulate the loop as is for now.
-            // If offset is needed:
-            // flatRoofVertices = CalculateInnerRoofEdge(currentOuterEdgeLoop, -flatRoofEdgeOffset, 0) ?? currentOuterEdgeLoop;
-
-
-            if (GeometryUtils.TriangulatePolygonEarClipping(flatRoofVertices, out var meshTriangles))
-            {
-                List<Vector2> meshUVs = CalculatePlanarUVs(flatRoofVertices);
-                GameObject flatRoofObj = CreateMeshObject(flatRoofVertices, meshTriangles, meshUVs, roofMaterial, "FlatRoofMesh", ROOF_FLAT_NAME, generatedBuildingRoot.transform);
-#if UNITY_EDITOR
-                _debugFlatRoofMesh = flatRoofObj?.GetComponent<MeshFilter>()?.sharedMesh;
-                _debugFlatRoofTransform = flatRoofObj?.transform;
-                ClearSlopedRoofDebug(); // Clear other roof type debug info
-                ClearRoofCapDebug();
-#endif
-            }
-            else { Debug.LogError("Flat Roof triangulation failed."); ClearFlatRoofDebug(); }
+            GenerateRoofMesh_Flat(sideMiddleFloors, polygonCenter);
         }
     }
-
-#if UNITY_EDITOR
-    // Helper methods to clear debug info
-    void ClearSlopedRoofDebug() { _debugOuterRoofVertices = null; _debugInnerRoofVertices = null; _debugSlopedRoofMesh = null; _debugSlopedRoofTransform = null; }
-    void ClearFlatRoofDebug() { _debugFlatRoofMesh = null; _debugFlatRoofTransform = null; }
-    void ClearRoofCapDebug() { _debugRoofCapMesh = null; _debugRoofCapTransform = null; }
-#endif
 
     // --- Roof Generation Helpers ---
 
@@ -521,130 +386,6 @@ public class PolygonBuildingGenerator : MonoBehaviour
             _debugRoofCapTransform = null;
         }
 #endif
-    }
-
-    // Add this function inside the PolygonBuildingGenerator class
-
-    /// <summary>
-    /// Calculates the vertices of an inner loop offset horizontally and vertically from an outer loop.
-    /// Uses the base vertexData for stable normal/direction calculation.
-    /// </summary>
-    /// <param name="outerLoop">The list of vertices defining the outer edge loop.</param>
-    /// <param name="horizontalDistance">How far to offset inwards horizontally.</param>
-    /// <param name="riseHeight">How far to offset upwards vertically.</param>
-    /// <returns>A new list of vertices for the inner loop, or null if calculation fails.</returns>
-    List<Vector3> CalculateInnerRoofEdge(List<Vector3> outerLoop, float horizontalDistance, float riseHeight)
-    {
-        // Basic validation
-        if (outerLoop == null || outerLoop.Count < 3)
-        {
-            Debug.LogError("CalculateInnerRoofEdge: Outer loop is null or has less than 3 vertices.");
-            return null;
-        }
-        if (horizontalDistance <= GeometryUtils.Epsilon && riseHeight <= GeometryUtils.Epsilon)
-        {
-            return new List<Vector3>(outerLoop); // No offset, return a copy of the outer loop
-        }
-        if (horizontalDistance < -GeometryUtils.Epsilon)
-        {
-            // Handle outward offset if needed, or treat as error/clamp?
-            // For inward offset calculation, negative distance is problematic.
-            Debug.LogWarning("CalculateInnerRoofEdge: Negative horizontalDistance detected, clamping to 0 for inward offset calculation.");
-            horizontalDistance = 0;
-        }
-
-
-        // Ensure vertexData matches the outer loop count for reliable indexing
-        if (vertexData.Count != outerLoop.Count)
-        {
-            Debug.LogError($"CalculateInnerRoofEdge: VertexData count ({vertexData.Count}) mismatch with outerLoop count ({outerLoop.Count}). Cannot reliably calculate normals/intersections.");
-            return null;
-        }
-
-        List<Vector3> innerVertices = new List<Vector3>(outerLoop.Count);
-        int n = outerLoop.Count;
-
-        for (int i = 0; i < n; i++)
-        {
-            // Indices for base polygon vertices around the current corner 'i'
-            int prevBaseI = (i + n - 1) % n;
-            int currBaseI = i;
-            int nextBaseI = (i + 1) % n;
-
-            Vector3 p1_base = vertexData[prevBaseI].position;
-            Vector3 p2_base = vertexData[currBaseI].position;
-            Vector3 p3_base = vertexData[nextBaseI].position;
-
-            // Get the corresponding vertex from the provided outerLoop (has the correct current Y)
-            Vector3 p2_outer = outerLoop[currBaseI];
-
-            // Calculate side directions and OUTWARD normals based on the base polygon
-            Vector3 sideDirPrev = (p2_base - p1_base).normalized;
-            Vector3 sideDirNext = (p3_base - p2_base).normalized;
-            Vector3 normalPrev = CalculateSideNormal(p1_base, p2_base); // Your reliable normal func
-            Vector3 normalNext = CalculateSideNormal(p2_base, p3_base); // Your reliable normal func
-
-            Vector3 innerVertexPosXZ;
-
-            // Define the offset lines *inwards* from the base polygon outline
-            // We subtract because the normal points outwards
-            Vector3 innerLineOriginPrev = p1_base - normalPrev * horizontalDistance;
-            Vector3 innerLineOriginNext = p2_base - normalNext * horizontalDistance;
-
-            // Find the intersection of these two INWARD offset lines
-            if (GeometryUtils.LineLineIntersection(innerLineOriginPrev, sideDirPrev, innerLineOriginNext, sideDirNext, out innerVertexPosXZ))
-            {
-                // Intersection found - this is the XZ position of the inner vertex
-            }
-            else // Fallback for parallel or failed intersection
-            {
-                Debug.LogWarning($"Parallel lines or intersection failed calculating inner loop at index {i} (Base vertex: {p2_base}). Using fallback offset.");
-                // Fallback: Offset the *outer* point inwards along the average normal
-                Vector3 avgNormal = (normalPrev + normalNext).normalized;
-                // Handle 180 degree straight line case where normals cancel out
-                if (avgNormal.sqrMagnitude < GeometryUtils.Epsilon * GeometryUtils.Epsilon)
-                {
-                    avgNormal = Quaternion.Euler(0, 90, 0) * sideDirPrev; // Rotate one direction 90 deg
-                }
-                // Use the XZ of the outer point as the base for the fallback offset
-                innerVertexPosXZ = new Vector3(p2_outer.x, 0, p2_outer.z) - avgNormal * horizontalDistance;
-            }
-
-            // Calculate final Y position: Start from the outer loop's Y and add the rise
-            float innerCornerY = p2_outer.y + riseHeight;
-            innerVertices.Add(new Vector3(innerVertexPosXZ.x, innerCornerY, innerVertexPosXZ.z));
-        }
-
-        return innerVertices;
-    }
-
-    // Add this function inside the PolygonBuildingGenerator class
-
-    /// <summary>
-    /// Calculates simple planar UVs (XZ projection) for a list of vertices.
-    /// </summary>
-    List<Vector2> CalculatePlanarUVs(List<Vector3> vertices)
-    {
-        List<Vector2> uvs = new List<Vector2>();
-        if (vertices == null || vertices.Count == 0) return uvs;
-
-        // Option 1: Absolute World Projection
-        foreach (Vector3 v in vertices)
-        {
-            uvs.Add(new Vector2(v.x * roofUvScale, v.z * roofUvScale));
-        }
-
-        // Option 2: Relative to Center (Uncomment to use)
-        /*
-        Vector3 center = Vector3.zero;
-        foreach(var v in vertices) center += v;
-        if (vertices.Count > 0) center /= vertices.Count;
-        foreach(Vector3 v in vertices)
-        {
-            uvs.Add(new Vector2((v.x - center.x) * roofUvScale, (v.z - center.z) * roofUvScale) + new Vector2(0.5f, 0.5f));
-        }
-        */
-        return uvs;
     }
 
     // --- Mesh Data Generation ---
@@ -887,12 +628,11 @@ public class PolygonBuildingGenerator : MonoBehaviour
         return sideMiddleFloors;
     }
 
-    float CalculateCornerHeight(int middleFloorsCount) // Helper moved here
+    float CalculateCornerHeight(int middleFloors) // Helper moved here
     {
-        float cornerY = 0; // Start at base
-        cornerY += floorHeight; // Add Ground floor height
-        cornerY += Mathf.Max(0, middleFloorsCount) * floorHeight;
-        //if (useMansardFloor) cornerY += floorHeight;
+        float cornerY = floorHeight; // Ground
+        cornerY += middleFloors * floorHeight; // Middle
+        if (useMansardFloor) cornerY += floorHeight;
         //if (useAtticFloor) cornerY += floorHeight;
         return cornerY;
     }
