@@ -21,9 +21,10 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
     public int middleFloors = 3;
     public float floorHeight = 3.0f; // CRITICAL: Assumed to be the VERTICAL rise of EACH floor type
     public bool useMansardFloor = true;
-    // public float mansardAngleDegrees = 10.0f; // Script will not use this if prefabs are pre-rotated
+    public float mansardAngleFromVerticalDegrees = 30.0f;
     public bool useAtticFloor = true;
-    // public float atticAngleDegrees = 50.0f;   // Script will not use this if prefabs are pre-rotated
+    // ADDED Field:
+    public float atticAngleFromVerticalDegrees = 60.0f;
 
     [Header("Facade Placement")]
     public bool scaleFacadesToFitSide = true;
@@ -376,14 +377,26 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
 
     float CalculateTotalWallTopHeight()
     {
-        // This calculation assumes 'floorHeight' is the VERTICAL rise for each floor type.
-        // The angles of mansard/attic prefabs (if any, now assumed to be pre-rotated in prefab)
-        // do not change the Y-coordinate of the top of that floor's allocated vertical space.
         float height = 0;
+        // Ground floor: vertical height is floorHeight
         height += floorHeight;
+        // Middle floors: vertical height is floorHeight per floor
         height += middleFloors * floorHeight;
-        if (useMansardFloor) height += floorHeight;
-        if (useAtticFloor) height += floorHeight;
+
+        // Mansard floor: actual vertical rise depends on angle
+        if (useMansardFloor)
+        {
+            // Calculate actual vertical rise for mansard
+            float mansardActualVerticalRise = floorHeight * Mathf.Cos(mansardAngleFromVerticalDegrees * Mathf.Deg2Rad);
+            height += mansardActualVerticalRise;
+        }
+        // Attic floor: actual vertical rise depends on angle
+        if (useAtticFloor)
+        {
+            // Calculate actual vertical rise for attic
+            float atticActualVerticalRise = floorHeight * Mathf.Cos(atticAngleFromVerticalDegrees * Mathf.Deg2Rad);
+            height += atticActualVerticalRise;
+        }
         return height;
     }
 
@@ -509,6 +522,7 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
     void OnValidate()
     {
         SynchronizeSideData();
+        middleFloors = Mathf.Max(0, middleFloors);
         middleFloors = Mathf.Max(0, middleFloors);
         floorHeight = Mathf.Max(0.1f, floorHeight);
         nominalFacadeWidth = Mathf.Max(0.1f, nominalFacadeWidth);

@@ -4,166 +4,217 @@ using System.Collections.Generic;
 
 public static class GeometryUtilsAdj
 {
-    public const float Epsilon = 1e-5f; // A small value for float comparisons
+    // Finds the intersection point of two 2D lines defined by point and direction.
+    // Returns true if intersection exists, false otherwise (parallel lines).
+    // Ignores the Y component.
 
-    public static bool LineLineIntersection(Vector3 line1Origin, Vector3 line1Direction,
-                                            Vector3 line2Origin, Vector3 line2Direction,
-                                            out Vector3 intersectionPoint)
+    public static bool LineLineIntersection(Vector3 p1, Vector3 dir1, Vector3 p2, Vector3 dir2, out Vector3 intersection)
     {
-        // --- Placeholder: Implement 2D line intersection on XZ plane ---
-        // This function should find the intersection of two lines defined by origin and direction.
-        // It's crucial for calculating mitered corners for the roof offset.
-        // Return true if intersection exists, false otherwise.
-        // intersectionPoint = ...;
+        intersection = Vector3.zero;
 
-        // Simplified Example (not robust for all cases, especially parallel lines):
-        Vector3 lineVec1 = line1Direction;
-        Vector3 lineVec2 = line2Direction;
-        Vector3 lineOrg1 = new Vector3(line1Origin.x, 0, line1Origin.z); // Project to XZ
-        Vector3 lineOrg2 = new Vector3(line2Origin.x, 0, line2Origin.z); // Project to XZ
+        float dx1 = dir1.x;
+        float dz1 = dir1.z;
+        float dx2 = dir2.x;
+        float dz2 = dir2.z;
 
-        Vector3 L1_End = lineOrg1 + lineVec1; // Assume direction is normalized and scale by a large number if not
-        Vector3 L2_End = lineOrg2 + lineVec2;
+        float determinant = (dz2 * dx1) - (dx2 * dz1);
 
-        float denominator = (L1_End.x - lineOrg1.x) * (L2_End.z - lineOrg2.z) - (L1_End.z - lineOrg1.z) * (L2_End.x - lineOrg2.x);
-
-        if (Mathf.Abs(denominator) < Epsilon) // Lines are parallel or collinear
+        // Check if lines are parallel (determinant is close to zero)
+        if (Mathf.Abs(determinant) < 1e-6)
         {
-            intersectionPoint = Vector3.zero;
-            return false;
+            return false; // Lines are parallel or coincident
         }
 
-        float t = ((lineOrg1.x - lineOrg2.x) * (L2_End.z - lineOrg2.z) - (lineOrg1.z - lineOrg2.z) * (L2_End.x - lineOrg2.x)) / denominator;
-        // float u = -((L1_End.x - lineOrg1.x) * (lineOrg1.z - lineOrg2.z) - (L1_End.z - lineOrg1.z) * (lineOrg1.x - lineOrg2.x)) / denominator;
+        float t = ((p2.x - p1.x) * dz1 - (p2.z - p1.z) * dx1) / determinant; // Parametric distance for line 2
 
-        intersectionPoint = lineOrg1 + t * lineVec1;
-        // Set Y to be consistent if needed, though this function primarily solves for XZ
-        intersectionPoint.y = line1Origin.y; // Or average, or specific height. For roof, it's usually fixed.
+        // Calculate intersection point using line 2's parameters
+        intersection = new Vector3(p2.x + dx2 * t, 0, p2.z + dz2 * t); // Y is set to 0
         return true;
-        // --- End Placeholder ---
     }
 
-    public static bool TriangulatePolygonEarClipping(List<Vector3> polygonVertices, out List<int> triangles)
+    public const float Epsilon = 1e-5f; // Make sure Epsilon is accessible if needed elsewhere
+
+    private static float CrossProduct2D(Vector3 p1, Vector3 p2, Vector3 p3)
     {
-        // --- Placeholder: Implement Ear Clipping triangulation algorithm ---
-        // This function takes a list of 2D (or 3D on a plane) polygon vertices
-        // and outputs a list of triangle indices for a simple polygon.
-        // triangles = ...;
+        return (p2.x - p1.x) * (p3.z - p1.z) - (p2.z - p1.z) * (p3.x - p1.x);
+    }
+
+    public static bool PointInTriangle(Vector3 pt, Vector3 v1, Vector3 v2, Vector3 v3)
+    {
+        // ... (Implementation is likely correct, keep as is) ...
+        float d1, d2, d3;
+        bool has_neg, has_pos;
+        d1 = CrossProduct2D(pt, v1, v2);
+        d2 = CrossProduct2D(pt, v2, v3);
+        d3 = CrossProduct2D(pt, v3, v1);
+        has_neg = (d1 < -Epsilon) || (d2 < -Epsilon) || (d3 < -Epsilon);
+        has_pos = (d1 > Epsilon) || (d2 > Epsilon) || (d3 > Epsilon);
+        return !(has_neg && has_pos);
+    }
+
+
+    // --- Ear Clipping Triangulation ---
+
+    public static bool TriangulatePolygonEarClipping(List<Vector3> vertices, out List<int> triangles)
+    {
         triangles = new List<int>();
-        if (polygonVertices == null || polygonVertices.Count < 3)
+        if (vertices == null || vertices.Count < 3)
         {
-            Debug.LogError("Triangulation failed: Not enough vertices.");
+            Debug.LogError("Ear Clipping: Need at least 3 vertices.");
             return false;
         }
 
-        List<Vector3> verts = new List<Vector3>(polygonVertices);
-        List<int> indices = new List<int>();
-        for (int i = 0; i < verts.Count; i++)
+        List<int> indices = new List<int>(vertices.Count);
+        for (int i = 0; i < vertices.Count; i++) { indices.Add(i); }
+
+        float signedArea = 0f;
+        for (int i = 0; i < vertices.Count; i++)
         {
-            indices.Add(i);
+            Vector3 p1 = vertices[i];
+            Vector3 p2 = vertices[(i + 1) % vertices.Count];
+            signedArea += (p1.x * p2.z) - (p2.x * p1.z);
         }
+        // Determine if the input polygon vertex order is Clockwise
+        bool isClockwise = signedArea < 0f;
 
-        int n = verts.Count;
-        if (n < 3) return false;
+        int remainingVertices = indices.Count;
+        int currentIndex = 0;
+        int loopSafetyCounter = 0;
+        int maxLoops = remainingVertices * remainingVertices * 2; // Increased safety margin slightly
 
-        while (n > 3)
+        while (remainingVertices > 3 && loopSafetyCounter++ < maxLoops)
         {
-            bool earFound = false;
-            for (int i = 0; i < n; i++)
+            int prevVIndex = currentIndex % remainingVertices;
+            int currVIndex = (currentIndex + 1) % remainingVertices;
+            int nextVIndex = (currentIndex + 2) % remainingVertices;
+
+            int prevIndex = indices[prevVIndex];
+            int currIndex = indices[currVIndex];
+            int nextIndex = indices[nextVIndex];
+
+            Vector3 pPrev = vertices[prevIndex];
+            Vector3 pCurr = vertices[currIndex];
+            Vector3 pNext = vertices[nextIndex];
+
+            float crossProd = CrossProduct2D(pPrev, pCurr, pNext);
+            // An ear vertex must be convex relative to the polygon's winding order.
+            // If CW, cross product should be negative (left turn is convex).
+            // If CCW, cross product should be positive (left turn is convex).
+            bool isConvex = isClockwise ? (crossProd < -Epsilon) : (crossProd > Epsilon);
+
+            bool isEar = isConvex;
+            if (isConvex)
             {
-                int prev = (i == 0) ? (n - 1) : (i - 1);
-                int next = (i == n - 1) ? 0 : (i + 1);
-
-                Vector3 p_prev = verts[indices[prev]];
-                Vector3 p_curr = verts[indices[i]];
-                Vector3 p_next = verts[indices[next]];
-
-                // Check if vertex is convex (using 2D cross product on XZ plane)
-                float crossProduct = (p_curr.x - p_prev.x) * (p_next.z - p_curr.z) -
-                                     (p_curr.z - p_prev.z) * (p_next.x - p_curr.x);
-
-                // Assuming CCW polygon, convex vertices have positive cross product.
-                // If your polygon can be CW, you'll need to determine winding first.
-                // For simplicity, this example might need adjustment for CW polygons or use signed area to determine winding.
-                bool isConvex = crossProduct > Epsilon;
-
-
-                if (isConvex)
+                // Check for other vertices inside the potential ear triangle
+                for (int i = 0; i < remainingVertices; i++)
                 {
-                    bool isEar = true;
-                    for (int j = 0; j < n; j++)
-                    {
-                        if (j == prev || j == i || j == next) continue;
-                        Vector3 pt = verts[indices[j]];
-                        if (IsPointInTriangle(pt, p_prev, p_curr, p_next))
-                        {
-                            isEar = false;
-                            break;
-                        }
-                    }
+                    // Don't check the triangle's own vertices
+                    if (i == prevVIndex || i == currVIndex || i == nextVIndex) continue;
 
-                    if (isEar)
+                    int testIndex = indices[i];
+                    if (PointInTriangle(vertices[testIndex], pPrev, pCurr, pNext))
                     {
-                        triangles.Add(indices[prev]);
-                        triangles.Add(indices[i]);
-                        triangles.Add(indices[next]);
-
-                        indices.RemoveAt(i);
-                        n--;
-                        earFound = true;
+                        isEar = false; // Not an ear, contains another vertex
                         break;
                     }
                 }
             }
-            if (!earFound)
+
+            if (isEar)
             {
-                // Fallback for complex cases or if no ear found (could be due to collinear points, degeneracies, or CW winding issues)
-                // A robust triangulation library would be better for production.
-                // Simple fan for remaining polygon if stuck:
-                // Debug.LogWarning("Ear clipping got stuck or polygon is complex. Using fallback for remaining points.");
-                for (int i = 1; i < n - 1; i++)
+                // --- THIS IS THE CORE FIX ---
+                // Add the triangle indices ensuring CCW order for Unity normals.
+                if (isClockwise)
                 {
-                    triangles.Add(indices[0]);
-                    triangles.Add(indices[i]);
-                    triangles.Add(indices[i + 1]);
+                    /*                    // Input was CW, so reverse order B, C to get CCW (A, C, B)
+                                        triangles.Add(prevIndex);
+                                        triangles.Add(nextIndex); // C
+                                        triangles.Add(currIndex); // B*/
+
+                    triangles.Add(prevIndex);
+                    triangles.Add(currIndex); // B
+                    triangles.Add(nextIndex); // C
+
+
                 }
-                break; // Exit while loop
+                else // Input was CCW
+                {
+                    /*                    // Input was CCW, so natural order (A, B, C) is already CCW
+                                        triangles.Add(prevIndex);
+                                        triangles.Add(currIndex); // B
+                                        triangles.Add(nextIndex); // C*/
+
+                    triangles.Add(prevIndex);
+                    triangles.Add(nextIndex); // C
+                    triangles.Add(currIndex); // B
+                }
+                // --- END CORE FIX ---
+
+                // Remove the middle vertex index of the clipped ear
+                indices.RemoveAt(currVIndex);
+                remainingVertices--;
+                // Reset index to re-evaluate from the start, as the polygon shape changed
+                currentIndex = 0; // Or: currentIndex = (currentIndex) % remainingVertices; // Adjust if needed
+                loopSafetyCounter = 0; // Reset safety counter
+            }
+            else // Not an ear, move to the next vertex
+            {
+                currentIndex++;
+                if (currentIndex >= remainingVertices && remainingVertices > 3) // Check needed?
+                {
+                    Debug.LogError($"Ear Clipping: Failed to find an ear after checking all vertices ({remainingVertices} remaining). LoopCounter: {loopSafetyCounter}. Polygon might be invalid.");
+                    // You might attempt some recovery here, or just fail.
+                    // Forcing a clip might lead to bad geometry.
+                    // Example: Force remove the current vertex and try again (risky)
+                    // indices.RemoveAt(currVIndex);
+                    // remainingVertices--;
+                    // currentIndex = 0;
+                    return false; // Safer to fail
+                }
             }
         }
-        // Add the last triangle
-        if (n == 3)
+
+        // Add the last remaining triangle (should always have 3 vertices left if valid)
+        if (remainingVertices == 3)
         {
-            triangles.Add(indices[0]);
-            triangles.Add(indices[1]);
-            triangles.Add(indices[2]);
+            // --- APPLY CONSISTENT FIX HERE TOO ---
+            if (isClockwise)
+            {
+                /*                // Input was CW, reverse order 1, 2 to get CCW (0, 2, 1)
+                                triangles.Add(indices[0]);
+                                triangles.Add(indices[2]); // 2
+                                triangles.Add(indices[1]); // 1*/
+
+                // Try outputting natural order (0, 1, 2), which would be CW
+                triangles.Add(indices[0]);
+                triangles.Add(indices[1]); // 1
+                triangles.Add(indices[2]); // 2
+            }
+            else // Input was CCW
+            {
+                /*                // Input was CCW, so natural order (0, 1, 2) is already CCW
+                                triangles.Add(indices[0]);
+                                triangles.Add(indices[1]); // 1
+                                triangles.Add(indices[2]); // 2*/
+
+                // Try outputting reversed order (0, 2, 1), which would be CW
+                triangles.Add(indices[0]);
+                triangles.Add(indices[2]); // 2
+                triangles.Add(indices[1]); // 1
+            }
+            // --- END CONSISTENT FIX ---
         }
-        // Debug.LogWarning("TriangulatePolygonEarClipping is a basic implementation. Consider a robust library for complex polygons.");
-        return triangles.Count > 0;
-        // --- End Placeholder ---
-    }
-
-    // Helper for basic ear clipping (point in triangle test on XZ plane)
-    private static bool IsPointInTriangle(Vector3 p, Vector3 a, Vector3 b, Vector3 c)
-    {
-        // Project to XZ plane
-        Vector2 p_xz = new Vector2(p.x, p.z);
-        Vector2 a_xz = new Vector2(a.x, a.z);
-        Vector2 b_xz = new Vector2(b.x, b.z);
-        Vector2 c_xz = new Vector2(c.x, c.z);
-
-        float s = a_xz.y * c_xz.x - a_xz.x * c_xz.y + (c_xz.y - a_xz.y) * p_xz.x + (a_xz.x - c_xz.x) * p_xz.y;
-        float t = a_xz.x * b_xz.y - a_xz.y * b_xz.x + (a_xz.y - b_xz.y) * p_xz.x + (b_xz.x - a_xz.x) * p_xz.y;
-
-        if ((s < 0) != (t < 0) && s != 0 && t != 0)
+        else if (loopSafetyCounter >= maxLoops)
+        {
+            Debug.LogError($"Ear Clipping: Hit safety counter limit ({loopSafetyCounter}/{maxLoops}). Failed to triangulate.");
             return false;
-
-        float A = -b_xz.y * c_xz.x + a_xz.y * (c_xz.x - b_xz.x) + a_xz.x * (b_xz.y - c_xz.y) + b_xz.x * c_xz.y;
-        if (A < 0.0)
-        {
-            s = -s;
-            t = -t;
-            A = -A;
         }
-        return s > 0 && t > 0 && (s + t) <= A;
+        else if (remainingVertices != 3)
+        {
+            Debug.LogError($"Ear Clipping: Ended with {remainingVertices} vertices instead of 3. Triangulation failed.");
+            return false;
+        }
+
+        return true; // Triangulation successful
     }
 }
