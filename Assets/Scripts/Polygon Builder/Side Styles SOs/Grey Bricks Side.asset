@@ -14,9 +14,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   groundFloorPrefabs:
   - {fileID: 8708220564727177831, guid: 8b0764e68e330714caff9558e3ea3810, type: 3}
-  - {fileID: 840262431670485971, guid: bef49a7f1b448bc4695929a31771cb2b, type: 3}
-  - {fileID: 840262431670485971, guid: aa74bb2364622284ba1cc00d56aec33d, type: 3}
   - {fileID: 5768072877802017965, guid: 19008e196509eca4e811823e83ce4b01, type: 3}
+  - {fileID: 3435898480930570988, guid: 26b6b37f1cd453f498ad414b0f3473d7, type: 3}
+  - {fileID: 1146474107583270852, guid: a3b813ef390cc6e45970a060f46c3920, type: 3}
+  - {fileID: 4490539103680082300, guid: 3f980a34d3d0de543bf471338667a012, type: 3}
+  - {fileID: 840262431670485971, guid: aa74bb2364622284ba1cc00d56aec33d, type: 3}
+  - {fileID: 840262431670485971, guid: bef49a7f1b448bc4695929a31771cb2b, type: 3}
   middleFloorPrefabs:
   - {fileID: 6014068919633220513, guid: 5fd9a0030c4cf2b4bb94f561f4c928a2, type: 3}
   - {fileID: 3501604703497272480, guid: 6b140ded6c912684597e395670cb55fe, type: 3}
