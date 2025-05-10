@@ -1,5 +1,4 @@
-﻿// PolygonBuildingGeneratorAdj.cs
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -7,13 +6,13 @@ using System.Linq;
 public class PolygonBuildingGeneratorAdj : MonoBehaviour
 {
     [Header("Polygon Definition")]
-    public List<PolygonVertexDataAdj> vertexData = new List<PolygonVertexDataAdj>() {
+    public List<PolygonVertexData> vertexData = new List<PolygonVertexData>() {
         new() { position = new Vector3(0, 0, 0), addCornerElement = true },
         new() { position = new Vector3(0, 0, 5), addCornerElement = true },
         new() { position = new Vector3(5, 0, 5), addCornerElement = true },
         new() { position = new Vector3(5, 0, 0), addCornerElement = true }
     };
-    public List<PolygonSideDataAdj> sideData = new List<PolygonSideDataAdj>();
+    public List<PolygonSideData> sideData = new List<PolygonSideData>();
     public float vertexSnapSize = 1.0f;
     public int minSideLengthUnits = 1;
 
@@ -21,10 +20,10 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
     public int middleFloors = 3;
     public float floorHeight = 3.0f; // CRITICAL: Assumed to be the VERTICAL rise of EACH floor type
     public bool useMansardFloor = true;
-    public float mansardAngleFromVerticalDegrees = 30.0f;
+    public float mansardAngleFromVerticalDegrees = 10.0f;
     public bool useAtticFloor = true;
     // ADDED Field:
-    public float atticAngleFromVerticalDegrees = 60.0f;
+    public float atticAngleFromVerticalDegrees = 50.0f;
 
     [Header("Facade Placement")]
     public bool scaleFacadesToFitSide = true;
@@ -104,7 +103,7 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
             Vector3 sideVector = p2 - p1;
             float sideDistance = sideVector.magnitude;
 
-            if (sideDistance < GeometryUtilsAdj.Epsilon) continue;
+            if (sideDistance < GeometryUtils.Epsilon) continue;
 
             Vector3 sideDirection = sideVector.normalized;
             Vector3 sideNormal = CalculateSideNormal(p1, p2);
@@ -160,7 +159,9 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
 
         GameObject cornersParent = new GameObject(CORNERS_NAME);
         cornersParent.transform.SetParent(generatedBuildingRoot.transform, false);
-        float pivotOffsetVertical = floorHeight * 0.5f; // Assuming corner elements also use centered pivots for floorHeight
+
+        // Pivot offset for body elements, assuming their pivots are centered vertically within their nominal 'floorHeight'
+        float pivotOffsetVertical = floorHeight * 0.5f;
 
         for (int i = 0; i < vertexData.Count; i++)
         {
@@ -171,49 +172,83 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
             Vector3 prevPos = vertexData[prevI].position;
             Vector3 nextPos = vertexData[(i + 1) % vertexData.Count].position;
 
-            CalculateCornerTransform(prevPos, currentPosRaw, nextPos, out Vector3 cornerBaseHorizontalPos, out Quaternion baseCornerRotation); // Only outward rotation
+            CalculateCornerTransform(prevPos, currentPosRaw, nextPos, out Vector3 cornerBaseHorizontalPos, out Quaternion baseCornerRotation);
+            // cornerBaseHorizontalPos is the XZ position for the corner, its Y component is 0 from vertexData.
 
-            float currentBottomY = 0;
-            float cornerWidth = nominalFacadeWidth;
+            // This variable tracks the Y-coordinate for the *base* of the current nominal floorHeight slot.
+            // Body elements are placed with their pivots centered within these nominal slots.
+            float nominalCurrentElementBaseY = 0;
+            float cornerWidth = nominalFacadeWidth; // Width for corner elements
 
             if (hasCornerBodyPrefabs)
             {
-                // Ground Floor Corner
-                Vector3 groundCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (currentBottomY + pivotOffsetVertical);
+                // Ground Floor Corner Element
+                // The pivot of the ground element is at (nominalCurrentElementBaseY + pivotOffsetVertical)
+                Vector3 groundCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (nominalCurrentElementBaseY + pivotOffsetVertical);
                 InstantiateFacadeSegment(cornerElementPrefabs, groundCornerPivotPos, baseCornerRotation, cornersParent.transform, cornerWidth, true);
-                currentBottomY += floorHeight;
+                nominalCurrentElementBaseY += floorHeight; // Advance to the base of the next nominal slot
 
-                // Middle Floor Corners
+                // Middle Floor Corner Elements
                 for (int floor = 0; floor < middleFloors; floor++)
                 {
-                    Vector3 middleCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (currentBottomY + pivotOffsetVertical);
+                    Vector3 middleCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (nominalCurrentElementBaseY + pivotOffsetVertical);
                     InstantiateFacadeSegment(cornerElementPrefabs, middleCornerPivotPos, baseCornerRotation, cornersParent.transform, cornerWidth, true);
-                    currentBottomY += floorHeight;
+                    nominalCurrentElementBaseY += floorHeight;
                 }
 
-                // Mansard Floor Corner - Assuming cornerElementPrefabs for mansard are pre-rotated & centered
+                // Mansard Floor Corner Element
+                // Assumed to be pre-rotated and centered for 'floorHeight' (its original unrotated height).
+                // It's placed in its nominal slot. Its actual vertical contribution will be less if angled.
                 if (useMansardFloor)
                 {
-                    Vector3 mansardCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (currentBottomY + pivotOffsetVertical);
-                    // If cornerElementPrefabs list contains specific mansard/attic prefabs, they should be pre-rotated.
-                    // If cornerElementPrefabs are generic straight pieces, this is fine.
-                    // If you use SideStyleSO for corners, that would give more control. For now, assume generic or pre-rotated.
+                    Vector3 mansardCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (nominalCurrentElementBaseY + pivotOffsetVertical);
                     InstantiateFacadeSegment(cornerElementPrefabs, mansardCornerPivotPos, baseCornerRotation, cornersParent.transform, cornerWidth, true);
-                    currentBottomY += floorHeight;
+                    nominalCurrentElementBaseY += floorHeight;
                 }
 
-                // Attic Floor Corner - Assuming cornerElementPrefabs for attic are pre-rotated & centered
+                // Attic Floor Corner Element
+                // Similar assumptions as Mansard.
                 if (useAtticFloor)
                 {
-                    Vector3 atticCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (currentBottomY + pivotOffsetVertical);
-                    InstantiateFacadeSegment(cornerElementPrefabs, atticCornerPivotPos, baseCornerRotation, cornersParent.transform, cornerWidth, true);
-                    currentBottomY += floorHeight;
+                    Vector3 atticCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (nominalCurrentElementBaseY + pivotOffsetVertical);
+                    //InstantiateFacadeSegment(cornerElementPrefabs, atticCornerPivotPos, baseCornerRotation, cornersParent.transform, cornerWidth, true);
+                    // No need to increment nominalCurrentElementBaseY if this is the last body part before the cap.
+                    //nominalCurrentElementBaseY += floorHeight; 
                 }
             }
 
             if (hasCornerCapPrefabs)
             {
-                Vector3 capPosition = cornerBaseHorizontalPos + Vector3.up * currentBottomY;
+                // Calculate the actual Y-coordinate for the base of the cap.
+                // This should be the sum of the true vertical rises of all body elements that form this corner.
+                float capBaseY = 0;
+
+                // Only sum heights if body prefabs are actually used for this corner.
+                // If not, capBaseY remains 0, and the cap is placed at ground level.
+                if (hasCornerBodyPrefabs)
+                {
+                    // Ground floor actual vertical contribution
+                    capBaseY += floorHeight;
+
+                    // Middle floors actual vertical contribution
+                    capBaseY += middleFloors * floorHeight;
+
+                    // Mansard floor actual vertical contribution
+                    if (useMansardFloor)
+                    {
+                        capBaseY += floorHeight;
+                    }
+
+                    // Attic floor actual vertical contribution
+                    if (useAtticFloor)
+                    {
+                        //capBaseY += floorHeight;
+                    }
+                }
+
+                // capPosition is the world position for the base of the cap prefab.
+                Vector3 capPosition = cornerBaseHorizontalPos + Vector3.up * capBaseY;
+                // Assuming cap prefab's pivot is at its base.
                 InstantiateFacadeSegment(cornerCapPrefabs, capPosition, baseCornerRotation, cornersParent.transform, cornerWidth, true);
             }
         }
@@ -235,7 +270,7 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
             return;
         }
 
-        if (!GeometryUtilsAdj.TriangulatePolygonEarClipping(roofPerimeter, out List<int> meshTriangles))
+        if (!GeometryUtils.TriangulatePolygonEarClipping(roofPerimeter, out List<int> meshTriangles))
         {
             Debug.LogError("Flat Roof triangulation failed.");
 #if UNITY_EDITOR
@@ -292,19 +327,19 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
 
             Vector3 vertexPosXZ_Calculated;
 
-            if (Mathf.Abs(edgeOffset) > GeometryUtilsAdj.Epsilon)
+            if (Mathf.Abs(edgeOffset) > GeometryUtils.Epsilon)   
             {
                 Vector3 lineOriginPrev_XZ = new Vector3(p1_base.x, 0, p1_base.z) + normalPrev_XZ * edgeOffset;
                 Vector3 lineOriginNext_XZ = new Vector3(p2_base.x, 0, p2_base.z) + normalNext_XZ * edgeOffset;
 
-                if (GeometryUtilsAdj.LineLineIntersection(lineOriginPrev_XZ, sideDirPrev_XZ, lineOriginNext_XZ, sideDirNext_XZ, out vertexPosXZ_Calculated))
+                if (GeometryUtils.LineLineIntersection(lineOriginPrev_XZ, sideDirPrev_XZ, lineOriginNext_XZ, sideDirNext_XZ, out vertexPosXZ_Calculated))
                 {
                     // Intersection found. vertexPosXZ_Calculated is on XZ plane.
                 }
                 else
                 {
                     Vector3 avgNormal_XZ = (normalPrev_XZ + normalNext_XZ).normalized;
-                    if (avgNormal_XZ.sqrMagnitude < GeometryUtilsAdj.Epsilon * GeometryUtilsAdj.Epsilon)
+                    if (avgNormal_XZ.sqrMagnitude < GeometryUtils.Epsilon * GeometryUtils.Epsilon)
                     {
                         avgNormal_XZ = new Vector3(sideDirPrev_XZ.z, 0, -sideDirPrev_XZ.x); // Perpendicular fallback
                     }
@@ -350,7 +385,7 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
         Vector3 sideNormalNext = CalculateSideNormal(p2_current, p3_next);
 
         Vector3 cornerFacingDirection = (sideNormalPrev + sideNormalNext).normalized;
-        if (cornerFacingDirection.sqrMagnitude < GeometryUtilsAdj.Epsilon * GeometryUtilsAdj.Epsilon)
+        if (cornerFacingDirection.sqrMagnitude < GeometryUtils.Epsilon * GeometryUtils.Epsilon)
         {
             Vector3 dir1 = (p2_current - p1_prev).normalized;
             Vector3 dir2 = (p3_next - p2_current).normalized;
@@ -358,7 +393,7 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
             if (Vector3.Dot(dir1, dir2) < -0.99f)
             {
                 cornerFacingDirection = -((p1_prev - p2_current).normalized + (p3_next - p2_current).normalized).normalized;
-                if (cornerFacingDirection.sqrMagnitude < GeometryUtilsAdj.Epsilon * GeometryUtilsAdj.Epsilon)
+                if (cornerFacingDirection.sqrMagnitude < GeometryUtils.Epsilon * GeometryUtils.Epsilon)
                 {
                     cornerFacingDirection = sideNormalNext;
                 }
@@ -412,10 +447,10 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
             return;
         }
 
-        PolygonSideDataAdj currentSideSettings = sideData[sideIndex];
+        PolygonSideData currentSideSettings = sideData[sideIndex];
         if (currentSideSettings.useCustomStyle && currentSideSettings.sideStylePreset != null)
         {
-            SideStyleSOAdj style = currentSideSettings.sideStylePreset;
+            SideStyleSO style = currentSideSettings.sideStylePreset;
             ground = style.groundFloorPrefabs != null && style.groundFloorPrefabs.Count > 0 ? style.groundFloorPrefabs : defaultGroundFloorPrefabs;
             middle = style.middleFloorPrefabs != null && style.middleFloorPrefabs.Count > 0 ? style.middleFloorPrefabs : defaultMiddleFloorPrefabs;
             mansard = style.mansardFloorPrefabs != null && style.mansardFloorPrefabs.Count > 0 ? style.mansardFloorPrefabs : defaultMansardFloorPrefabs;
@@ -441,7 +476,7 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
         instance.transform.position = worldPosition;
         instance.transform.rotation = worldRotation;
 
-        if (!isCorner && scaleFacadesToFitSide && nominalFacadeWidth > GeometryUtilsAdj.Epsilon && Mathf.Abs(segmentWidth - nominalFacadeWidth) > GeometryUtilsAdj.Epsilon)
+        if (!isCorner && scaleFacadesToFitSide && nominalFacadeWidth > GeometryUtils.Epsilon && Mathf.Abs(segmentWidth - nominalFacadeWidth) > GeometryUtils.Epsilon)
         {
             Vector3 localScale = instance.transform.localScale;
             float scaleFactor = segmentWidth / nominalFacadeWidth;
@@ -475,7 +510,7 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
 
     int CalculateNumSegments(float sideDistance)
     {
-        if (nominalFacadeWidth <= GeometryUtilsAdj.Epsilon) return Mathf.Max(1, minSideLengthUnits);
+        if (nominalFacadeWidth <= GeometryUtils.Epsilon) return Mathf.Max(1, minSideLengthUnits);
         int num;
         if (scaleFacadesToFitSide)
         {
@@ -501,21 +536,21 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
         sideDirection.y = 0;
         sideDirection.Normalize();
 
-        if (sideDirection.sqrMagnitude < GeometryUtilsAdj.Epsilon * GeometryUtilsAdj.Epsilon) return Vector3.forward;
+        if (sideDirection.sqrMagnitude < GeometryUtils.Epsilon * GeometryUtils.Epsilon) return Vector3.forward;
 
         Vector3 initialNormal = Vector3.Cross(sideDirection, Vector3.up).normalized; // This will be on XZ plane
         float signedArea = CalculateSignedArea();
 
-        if (signedArea > GeometryUtilsAdj.Epsilon) return -initialNormal;
+        if (signedArea > GeometryUtils.Epsilon) return -initialNormal;
         else return initialNormal;
     }
 
     public void SynchronizeSideData()
     {
-        if (vertexData == null) vertexData = new List<PolygonVertexDataAdj>();
-        if (sideData == null) sideData = new List<PolygonSideDataAdj>();
+        if (vertexData == null) vertexData = new List<PolygonVertexData>();
+        if (sideData == null) sideData = new List<PolygonSideData>();
         int requiredCount = vertexData.Count;
-        while (sideData.Count < requiredCount) sideData.Add(new PolygonSideDataAdj());
+        while (sideData.Count < requiredCount) sideData.Add(new PolygonSideData());
         while (sideData.Count > requiredCount && sideData.Count > 0) sideData.RemoveAt(sideData.Count - 1);
     }
 
@@ -532,7 +567,7 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
 
     public Vector3 SnapVertexPosition(Vector3 vertexPos)
     {
-        if (vertexSnapSize <= GeometryUtilsAdj.Epsilon) return new Vector3(vertexPos.x, 0f, vertexPos.z);
+        if (vertexSnapSize <= GeometryUtils.Epsilon) return new Vector3(vertexPos.x, 0f, vertexPos.z);
         return new Vector3(
             Mathf.Round(vertexPos.x / vertexSnapSize) * vertexSnapSize,
             0f,
