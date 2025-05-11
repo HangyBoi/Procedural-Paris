@@ -377,8 +377,8 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
 
                         GameObject cornerAssembly = Instantiate(selectedSet.cornerAssemblyPrefab, dedicatedCornersParent.transform);
                         cornerAssembly.name = $"Mansard_WallCorner_{i}_{selectedSet.cornerAssemblyPrefab.name}";
-                        cornerAssembly.transform.position = mansardCornerPivotPos;
-                        cornerAssembly.transform.rotation = baseCornerRotation;
+                        cornerAssembly.transform.localPosition = mansardCornerPivotPos; // Use localPosition
+                        cornerAssembly.transform.localRotation = baseCornerRotation;   // Use localRotation
                         // Scaling is assumed to be part of the prefab for dedicated corners.
                     }
                 }
@@ -489,7 +489,7 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
         }
     }
 
-    void InstantiateFacadeSegment(List<GameObject> prefabList, Vector3 worldPosition, Quaternion worldRotation, Transform parent, float segmentWidth, bool isCorner)
+    void InstantiateFacadeSegment(List<GameObject> prefabList, Vector3 localPosition, Quaternion localRotation, Transform parent, float segmentWidth, bool isCorner)
     {
         if (prefabList == null || prefabList.Count == 0) return;
         int randomIndex = Random.Range(0, prefabList.Count);
@@ -497,8 +497,8 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
         if (prefab == null) return;
 
         GameObject instance = Instantiate(prefab, parent);
-        instance.transform.position = worldPosition;
-        instance.transform.rotation = worldRotation;
+        instance.transform.localPosition = localPosition; // Use localPosition
+        instance.transform.localRotation = localRotation; // Use localRotation
 
         if (!isCorner && scaleFacadesToFitSide && nominalFacadeWidth > GeometryUtils.Epsilon && Mathf.Abs(segmentWidth - nominalFacadeWidth) > GeometryUtils.Epsilon)
         {
