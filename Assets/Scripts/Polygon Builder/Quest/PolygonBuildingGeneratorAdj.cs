@@ -1,7 +1,6 @@
 ﻿using UnityEngine;
+using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
-
 
 [System.Serializable]
 public class MansardCornerSet
@@ -35,6 +34,10 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
     public float vertexSnapSize = 1.0f;
     public int minSideLengthUnits = 1;
 
+    [Header("Building Style")]
+    [Tooltip("Assign a Building Style ScriptableObject to define default prefabs and corner configurations.")]
+    public BuildingStyleSO buildingStyle;
+
     [Header("Building Settings")]
     public int middleFloors = 3;
     public float floorHeight = 10.0f;
@@ -47,21 +50,12 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
     public bool scaleFacadesToFitSide = true;
     public float nominalFacadeWidth = 1.0f;
 
-    [Header("Default Prefabs")]
-    public List<GameObject> defaultGroundFloorPrefabs;
-    public List<GameObject> defaultMiddleFloorPrefabs;
-    public List<GameObject> defaultMansardFloorPrefabs; // These should be pre-rotated & centered for floorHeight
-    public List<GameObject> defaultAtticFloorPrefabs;   // These should be pre-rotated & centered for floorHeight
-
     [Header("Corner Elements")]
-    public List<GameObject> cornerElementPrefabs;
     public bool useCornerCaps = true;
-    public List<GameObject> cornerCapPrefabs;
     public float cornerElementForwardOffset = 0.0f;
 
     [Header("Mansard Roof Dedicated Corners")]
     public bool useDedicatedMansardCorners = true;
-    public List<MansardCornerSet> mansardCornerSets = new List<MansardCornerSet>();
     private Dictionary<int, MansardCornerSet> _activeMansardCorners;
 
     [Header("Roof Settings")]
@@ -80,6 +74,7 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
     [HideInInspector] public Transform _debugFlatRoofTransform;
 #endif
 
+
     public void GenerateBuilding()
     {
         ClearBuilding();
@@ -88,6 +83,10 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
         {
             Debug.LogWarning("Cannot generate building: Polygon requires at least 3 vertices.");
             return;
+        }
+        if (buildingStyle == null)
+        {
+            Debug.LogWarning("Building Style SO not assigned. Facades and dedicated corners might not generate as expected.", this);
         }
 
         generatedBuildingRoot = new GameObject(ROOT_NAME);
@@ -117,69 +116,6 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
         _debugFlatRoofMesh = null;
         _debugFlatRoofTransform = null;
 #endif
-    }
-
-    void PrecomputeCornerData()
-    {
-        if (vertexData.Count < 3) return;
-
-        for (int i = 0; i < vertexData.Count; i++)
-        {
-
-            int prevI = (i + vertexData.Count - 1) % vertexData.Count;
-            Vector3 currentPos = vertexData[i].position;
-            Vector3 prevPos = vertexData[prevI].position;
-            Vector3 nextPos = vertexData[(i + 1) % vertexData.Count].position;
-
-            float interiorAngle = CalculateInteriorCornerAngle(prevPos, currentPos, nextPos);
-
-            if (useDedicatedMansardCorners && mansardCornerSets.Count > 0)
-            {
-                MansardCornerSet matchedSet = FindMatchingMansardCornerSet(mansardCornerSets, interiorAngle);
-                if (matchedSet != null)
-                {
-                    _activeMansardCorners[i] = matchedSet;
-                }
-            }
-            // Add similar logic for _activeAtticCorners here if/when implemented
-        }
-    }
-
-    MansardCornerSet FindMatchingMansardCornerSet(List<MansardCornerSet> sets, float angle)
-    {
-        MansardCornerSet bestMatch = null;
-        float minDiff = float.MaxValue;
-
-        foreach (var set in sets)
-        {
-            if (set.cornerAssemblyPrefab == null) continue; // Skip if no prefab assigned
-
-            float diff = Mathf.Abs(angle - set.targetCornerAngle);
-            if (diff <= set.angleTolerance)
-            {
-                if (diff < minDiff) // Prefer closer matches
-                {
-                    minDiff = diff;
-                    bestMatch = set;
-                }
-            }
-        }
-        return bestMatch;
-    }
-
-    float CalculateInteriorCornerAngle(Vector3 pPrev, Vector3 pCurr, Vector3 pNext)
-    {
-        // Vectors pointing from current vertex to neighbors, on XZ plane
-        Vector3 dirToPrev = (new Vector3(pPrev.x, 0, pPrev.z) - new Vector3(pCurr.x, 0, pCurr.z)).normalized;
-        Vector3 dirToNext = (new Vector3(pNext.x, 0, pNext.z) - new Vector3(pCurr.x, 0, pCurr.z)).normalized;
-
-        if (dirToPrev.sqrMagnitude < GeometryUtils.Epsilon || dirToNext.sqrMagnitude < GeometryUtils.Epsilon)
-        {
-            return 180f; // Collinear or zero length, treat as straight
-        }
-
-        float angle = Vector3.Angle(dirToPrev, dirToNext);
-        return angle;
     }
 
     void GenerateFacades()
@@ -297,6 +233,106 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
         }
     }
 
+    void PrecomputeCornerData()
+    {
+        if (vertexData.Count < 3) return;
+
+        for (int i = 0; i < vertexData.Count; i++)
+        {
+
+            int prevI = (i + vertexData.Count - 1) % vertexData.Count;
+            Vector3 currentPos = vertexData[i].position;
+            Vector3 prevPos = vertexData[prevI].position;
+            Vector3 nextPos = vertexData[(i + 1) % vertexData.Count].position;
+
+            float interiorAngle = CalculateInteriorCornerAngle(prevPos, currentPos, nextPos);
+
+            if (useDedicatedMansardCorners && buildingStyle.mansardCornerSets.Count > 0)
+            {
+                MansardCornerSet matchedSet = FindMatchingMansardCornerSet(buildingStyle.mansardCornerSets, interiorAngle);
+                if (matchedSet != null)
+                {
+                    _activeMansardCorners[i] = matchedSet;
+                }
+            }
+            // Add similar logic for _activeAtticCorners here if/when implemented
+        }
+    }
+
+    MansardCornerSet FindMatchingMansardCornerSet(List<MansardCornerSet> sets, float angle)
+    {
+        MansardCornerSet bestMatch = null;
+        float minDiff = float.MaxValue;
+
+        foreach (var set in sets)
+        {
+            if (set.cornerAssemblyPrefab == null) continue; // Skip if no prefab assigned
+
+            float diff = Mathf.Abs(angle - set.targetCornerAngle);
+            if (diff <= set.angleTolerance)
+            {
+                if (diff < minDiff) // Prefer closer matches
+                {
+                    minDiff = diff;
+                    bestMatch = set;
+                }
+            }
+        }
+        return bestMatch;
+    }
+
+    public float CalculateInteriorCornerAngle(Vector3 pPrev, Vector3 pCurr, Vector3 pNext)
+    {
+        // Ensure we are working on the XZ plane
+        Vector2 prev = new Vector2(pPrev.x, pPrev.z);
+        Vector2 curr = new Vector2(pCurr.x, pCurr.z);
+        Vector2 next = new Vector2(pNext.x, pNext.z);
+
+        Vector2 v1 = (prev - curr).normalized;
+        Vector2 v2 = (next - curr).normalized;
+
+        if (v1.sqrMagnitude < GeometryUtils.Epsilon * GeometryUtils.Epsilon ||
+            v2.sqrMagnitude < GeometryUtils.Epsilon * GeometryUtils.Epsilon)
+        {
+            return 180f;
+        }
+
+        float angle = Vector2.Angle(v1, v2);
+
+        float crossProductSign = (v1.x * v2.y) - (v1.y * v2.x);
+
+        float polygonWinding = CalculateSignedArea();
+
+        // If polygon is CCW (signedArea > 0):
+        //  - A positive crossProductSign (v1 to v2 is a "left" turn in 2D screen space if Y is up) means it's concave.
+        //  - A negative crossProductSign (v1 to v2 is a "right" turn) means it's convex.
+        // If polygon is CW (signedArea < 0):
+        //  - The interpretation of convexity/concavity flips.
+
+        bool isConcave = false;
+        if (Mathf.Abs(polygonWinding) > GeometryUtils.Epsilon)
+        {
+            if (polygonWinding > 0) // CCW polygon
+            {
+                if (crossProductSign > GeometryUtils.Epsilon) isConcave = true;
+            }
+            else // CW polygon
+            {
+                if (crossProductSign < -GeometryUtils.Epsilon) isConcave = true;
+            }
+        }
+
+        if (isConcave)
+        {
+            return 360f - angle;
+        }
+        else
+        {
+
+            return angle;
+        }
+    }
+
     void GenerateDedicatedWallCorners()
     {
         if (!useDedicatedMansardCorners /* && !useDedicatedAtticCorners (add later) */)
@@ -370,10 +406,10 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
 
     void GenerateCornerElements()
     {
-        bool hasGenericCornerBodyPrefabs = cornerElementPrefabs != null && cornerElementPrefabs.Count > 0;
-        bool hasCornerCapPrefabs = useCornerCaps && cornerCapPrefabs != null && cornerCapPrefabs.Count > 0;
+        bool hasChimneyBodyPrefabs = buildingStyle != null && buildingStyle.defaultChimneyBodyPrefabs != null && buildingStyle.defaultChimneyBodyPrefabs.Count > 0;
+        bool hasChimneyCapPrefabs = useCornerCaps && buildingStyle != null && buildingStyle.defaultChimneyCapPrefabs != null && buildingStyle.defaultChimneyCapPrefabs.Count > 0;
 
-        if (!hasGenericCornerBodyPrefabs && !hasCornerCapPrefabs)
+        if (!hasChimneyBodyPrefabs && !hasChimneyCapPrefabs)
         {
             Debug.Log("No generic corner body or cap prefabs assigned; skipping chimney generation.");
             return;
@@ -400,20 +436,20 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
             float nominalCurrentElementBaseY = 0; // Reset Y for each chimney stack
 
             // Ground Floor Chimney Segment
-            if (hasGenericCornerBodyPrefabs)
+            if (hasChimneyBodyPrefabs)
             {
                 Vector3 groundCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (nominalCurrentElementBaseY + pivotOffsetVertical);
-                InstantiateFacadeSegment(cornerElementPrefabs, groundCornerPivotPos, baseCornerRotation, chimneyParent.transform, cornerWidth, true);
+                InstantiateFacadeSegment(buildingStyle.defaultChimneyBodyPrefabs, groundCornerPivotPos, baseCornerRotation, chimneyParent.transform, cornerWidth, true);
             }
             nominalCurrentElementBaseY += floorHeight;
 
             // Middle Floor Chimney Segments
-            if (hasGenericCornerBodyPrefabs)
+            if (hasChimneyBodyPrefabs)
             {
                 for (int floor = 0; floor < middleFloors; floor++)
                 {
                     Vector3 middleCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (nominalCurrentElementBaseY + pivotOffsetVertical);
-                    InstantiateFacadeSegment(cornerElementPrefabs, middleCornerPivotPos, baseCornerRotation, chimneyParent.transform, cornerWidth, true);
+                    InstantiateFacadeSegment(buildingStyle.defaultChimneyBodyPrefabs, middleCornerPivotPos, baseCornerRotation, chimneyParent.transform, cornerWidth, true);
                     nominalCurrentElementBaseY += floorHeight;
                 }
             }
@@ -425,10 +461,10 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
             // Mansard Floor Chimney Segment (Uses generic cornerElementPrefabs)
             if (useMansardFloor)
             {
-                if (hasGenericCornerBodyPrefabs)
+                if (hasChimneyBodyPrefabs)
                 {
                     Vector3 mansardCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (nominalCurrentElementBaseY + pivotOffsetVertical);
-                    InstantiateFacadeSegment(cornerElementPrefabs, mansardCornerPivotPos, baseCornerRotation, chimneyParent.transform, cornerWidth, true);
+                    InstantiateFacadeSegment(buildingStyle.defaultChimneyBodyPrefabs, mansardCornerPivotPos, baseCornerRotation, chimneyParent.transform, cornerWidth, true);
                 }
                 nominalCurrentElementBaseY += floorHeight;
             }
@@ -436,19 +472,19 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
             // Attic Floor Chimney Segment (Uses generic cornerElementPrefabs)
             if (useAtticFloor)
             {
-                if (hasGenericCornerBodyPrefabs)
+                if (hasChimneyBodyPrefabs)
                 {
                     Vector3 atticCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (nominalCurrentElementBaseY + pivotOffsetVertical);
-                    //InstantiateFacadeSegment(cornerElementPrefabs, atticCornerPivotPos, baseCornerRotation, chimneyParent.transform, cornerWidth, true);
+                    //InstantiateFacadeSegment(buildingStyle.defaultChimneyBodyPrefabs, groundCornerPivotPos, baseCornerRotation, chimneyParent.transform, cornerWidth, true);
                 }
                 //nominalCurrentElementBaseY += floorHeight; // Advance Y for cap placement
             }
 
             // Chimney Cap
-            if (hasCornerCapPrefabs)
+            if (hasChimneyCapPrefabs)
             {
                 Vector3 capPosition = cornerBaseHorizontalPos + Vector3.up * nominalCurrentElementBaseY;
-                InstantiateFacadeSegment(cornerCapPrefabs, capPosition, baseCornerRotation, chimneyParent.transform, cornerWidth, true);
+                InstantiateFacadeSegment(buildingStyle.defaultChimneyCapPrefabs, capPosition, baseCornerRotation, chimneyParent.transform, cornerWidth, true);
             }
         }
     }
@@ -545,7 +581,7 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
 
             Vector3 vertexPosXZ_Calculated;
 
-            if (Mathf.Abs(edgeOffset) > GeometryUtils.Epsilon)   
+            if (Mathf.Abs(edgeOffset) > GeometryUtils.Epsilon)
             {
                 Vector3 lineOriginPrev_XZ = new Vector3(p1_base.x, 0, p1_base.z) + normalPrev_XZ * edgeOffset;
                 Vector3 lineOriginNext_XZ = new Vector3(p2_base.x, 0, p2_base.z) + normalNext_XZ * edgeOffset;
@@ -655,32 +691,45 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
 
     void GetSidePrefabLists(int sideIndex, out List<GameObject> ground, out List<GameObject> middle, out List<GameObject> mansard, out List<GameObject> attic)
     {
-        if (sideIndex < 0 || sideIndex >= sideData.Count)
+        // Initialize with empty lists as a true default if nothing is found
+        List<GameObject> styleGround = null;
+        List<GameObject> styleMiddle = null;
+        List<GameObject> styleMansard = null;
+        List<GameObject> styleAttic = null;
+
+        // 1. Try Side-specific SideStyleSO
+        if (sideIndex >= 0 && sideIndex < sideData.Count)
         {
-            Debug.LogError($"sideIndex {sideIndex} out of bounds. Falling back to defaults.");
-            ground = defaultGroundFloorPrefabs;
-            middle = defaultMiddleFloorPrefabs;
-            mansard = defaultMansardFloorPrefabs;
-            attic = defaultAtticFloorPrefabs;
-            return;
+            PolygonSideData currentSideSettings = sideData[sideIndex];
+            if (currentSideSettings.useCustomStyle && currentSideSettings.sideStylePreset != null)
+            {
+                SideStyleSO sidePreset = currentSideSettings.sideStylePreset;
+                if (sidePreset.groundFloorPrefabs != null && sidePreset.groundFloorPrefabs.Count > 0) styleGround = sidePreset.groundFloorPrefabs;
+                if (sidePreset.middleFloorPrefabs != null && sidePreset.middleFloorPrefabs.Count > 0) styleMiddle = sidePreset.middleFloorPrefabs;
+                if (sidePreset.mansardFloorPrefabs != null && sidePreset.mansardFloorPrefabs.Count > 0) styleMansard = sidePreset.mansardFloorPrefabs;
+                if (sidePreset.atticFloorPrefabs != null && sidePreset.atticFloorPrefabs.Count > 0) styleAttic = sidePreset.atticFloorPrefabs;
+            }
         }
 
-        PolygonSideData currentSideSettings = sideData[sideIndex];
-        if (currentSideSettings.useCustomStyle && currentSideSettings.sideStylePreset != null)
+        // 2. Fallback to BuildingStyleSO if side-specific lists were not populated or not used
+        if (buildingStyle != null)
         {
-            SideStyleSO style = currentSideSettings.sideStylePreset;
-            ground = style.groundFloorPrefabs != null && style.groundFloorPrefabs.Count > 0 ? style.groundFloorPrefabs : defaultGroundFloorPrefabs;
-            middle = style.middleFloorPrefabs != null && style.middleFloorPrefabs.Count > 0 ? style.middleFloorPrefabs : defaultMiddleFloorPrefabs;
-            mansard = style.mansardFloorPrefabs != null && style.mansardFloorPrefabs.Count > 0 ? style.mansardFloorPrefabs : defaultMansardFloorPrefabs;
-            attic = style.atticFloorPrefabs != null && style.atticFloorPrefabs.Count > 0 ? style.atticFloorPrefabs : defaultAtticFloorPrefabs;
+            if (styleGround == null && buildingStyle.defaultGroundFloorPrefabs != null && buildingStyle.defaultGroundFloorPrefabs.Count > 0) styleGround = buildingStyle.defaultGroundFloorPrefabs;
+            if (styleMiddle == null && buildingStyle.defaultMiddleFloorPrefabs != null && buildingStyle.defaultMiddleFloorPrefabs.Count > 0) styleMiddle = buildingStyle.defaultMiddleFloorPrefabs;
+            if (styleMansard == null && buildingStyle.defaultMansardFloorPrefabs != null && buildingStyle.defaultMansardFloorPrefabs.Count > 0) styleMansard = buildingStyle.defaultMansardFloorPrefabs;
+            if (styleAttic == null && buildingStyle.defaultAtticFloorPrefabs != null && buildingStyle.defaultAtticFloorPrefabs.Count > 0) styleAttic = buildingStyle.defaultAtticFloorPrefabs;
         }
-        else
-        {
-            ground = defaultGroundFloorPrefabs;
-            middle = defaultMiddleFloorPrefabs;
-            mansard = defaultMansardFloorPrefabs;
-            attic = defaultAtticFloorPrefabs;
-        }
+
+        // Assign the determined lists (or null if none found, which InstantiateFacadeSegment handles)
+        ground = styleGround;
+        middle = styleMiddle;
+        mansard = styleMansard;
+        attic = styleAttic;
+
+        // Optional: Log if any list ends up null or empty
+        if ((ground == null || ground.Count == 0) && (styleGround == null && (buildingStyle?.defaultGroundFloorPrefabs == null || buildingStyle.defaultGroundFloorPrefabs.Count == 0)))
+            Debug.LogWarning($"Side {sideIndex}: No Ground floor prefabs found from SideStyleSO or BuildingStyleSO.");
+        // Similar warnings for other floor types if desired
     }
 
     Vector3 CalculatePolygonCenter()
