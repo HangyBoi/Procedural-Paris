@@ -2,6 +2,25 @@
 using System.Collections.Generic;
 using System.Linq;
 
+
+[System.Serializable]
+public class MansardCornerSet
+{
+    [Tooltip("The approximate interior angle (in degrees) of the polygon corner this prefab set is designed for. E.g., 90 for a right angle between two walls.")]
+    public float targetCornerAngle = 90.0f;
+    [Tooltip("Tolerance for matching this angle (in degrees). E.g., if 15, it matches angles from target-15 to target+15.")]
+    public float angleTolerance = 15.0f;
+
+    [Tooltip("The main prefab for this corner. Assumed to be a complete corner assembly (e.g., pre-assembled front, left, right parts if applicable). Its Z-axis should face along the corner's bisector if rotated by baseCornerRotation. Pivot ideally at its base and horizontally centered for the intended floorHeight slot.")]
+    public GameObject cornerAssemblyPrefab;
+
+    [Tooltip("How much this corner assembly extends from the mathematical polygon vertex point ALONG the wall towards the NEXT vertex. This side's regular facades will start after this distance.")]
+    public float coverageAlongNextSide; // e.g. how much it covers along side V_current -> V_next
+
+    [Tooltip("How much this corner assembly extends from the mathematical polygon vertex point ALONG the wall towards the PREVIOUS vertex. The previous side's regular facades will end before this distance from V_current.")]
+    public float coverageAlongPrevSide; // e.g. how much it covers along side V_prev -> V_current
+}
+
 [RequireComponent(typeof(MeshFilter))]
 public class PolygonBuildingGeneratorAdj : MonoBehaviour
 {
@@ -18,11 +37,10 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
 
     [Header("Building Settings")]
     public int middleFloors = 3;
-    public float floorHeight = 3.0f; // CRITICAL: Assumed to be the VERTICAL rise of EACH floor type
+    public float floorHeight = 10.0f;
     public bool useMansardFloor = true;
     public float mansardAngleFromVerticalDegrees = 10.0f;
     public bool useAtticFloor = true;
-    // ADDED Field:
     public float atticAngleFromVerticalDegrees = 50.0f;
 
     [Header("Facade Placement")]
@@ -36,10 +54,15 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
     public List<GameObject> defaultAtticFloorPrefabs;   // These should be pre-rotated & centered for floorHeight
 
     [Header("Corner Elements")]
-    public List<GameObject> cornerElementPrefabs; // Also assumed pre-rotated if they are mansard/attic types
+    public List<GameObject> cornerElementPrefabs;
     public bool useCornerCaps = true;
     public List<GameObject> cornerCapPrefabs;
     public float cornerElementForwardOffset = 0.0f;
+
+    [Header("Mansard Roof Dedicated Corners")]
+    public bool useDedicatedMansardCorners = true;
+    public List<MansardCornerSet> mansardCornerSets = new List<MansardCornerSet>();
+    private Dictionary<int, MansardCornerSet> _activeMansardCorners;
 
     [Header("Roof Settings")]
     public float flatRoofEdgeOffset = 0.0f;
@@ -50,6 +73,7 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
     private const string ROOT_NAME = "Generated Building";
     private const string CORNERS_NAME = "Corner Elements";
     private const string ROOF_FLAT_NAME = "Procedural Flat Roof";
+    private const string DEDICATED_WALL_CORNERS_NAME = "Dedicated Wall Corners";
 
 #if UNITY_EDITOR
     [HideInInspector] public Mesh _debugFlatRoofMesh;
@@ -69,7 +93,11 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
         generatedBuildingRoot = new GameObject(ROOT_NAME);
         generatedBuildingRoot.transform.SetParent(this.transform, false);
 
+        _activeMansardCorners = new Dictionary<int, MansardCornerSet>();
+
+        PrecomputeCornerData();
         GenerateFacades();
+        GenerateDedicatedWallCorners();
         GenerateCornerElements();
         GenerateRoof();
     }
@@ -83,10 +111,75 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
             else Destroy(existingRoot.gameObject);
         }
         generatedBuildingRoot = null;
+        _activeMansardCorners?.Clear();
+
 #if UNITY_EDITOR
         _debugFlatRoofMesh = null;
         _debugFlatRoofTransform = null;
 #endif
+    }
+
+    void PrecomputeCornerData()
+    {
+        if (vertexData.Count < 3) return;
+
+        for (int i = 0; i < vertexData.Count; i++)
+        {
+
+            int prevI = (i + vertexData.Count - 1) % vertexData.Count;
+            Vector3 currentPos = vertexData[i].position;
+            Vector3 prevPos = vertexData[prevI].position;
+            Vector3 nextPos = vertexData[(i + 1) % vertexData.Count].position;
+
+            float interiorAngle = CalculateInteriorCornerAngle(prevPos, currentPos, nextPos);
+
+            if (useDedicatedMansardCorners && mansardCornerSets.Count > 0)
+            {
+                MansardCornerSet matchedSet = FindMatchingMansardCornerSet(mansardCornerSets, interiorAngle);
+                if (matchedSet != null)
+                {
+                    _activeMansardCorners[i] = matchedSet;
+                }
+            }
+            // Add similar logic for _activeAtticCorners here if/when implemented
+        }
+    }
+
+    MansardCornerSet FindMatchingMansardCornerSet(List<MansardCornerSet> sets, float angle)
+    {
+        MansardCornerSet bestMatch = null;
+        float minDiff = float.MaxValue;
+
+        foreach (var set in sets)
+        {
+            if (set.cornerAssemblyPrefab == null) continue; // Skip if no prefab assigned
+
+            float diff = Mathf.Abs(angle - set.targetCornerAngle);
+            if (diff <= set.angleTolerance)
+            {
+                if (diff < minDiff) // Prefer closer matches
+                {
+                    minDiff = diff;
+                    bestMatch = set;
+                }
+            }
+        }
+        return bestMatch;
+    }
+
+    float CalculateInteriorCornerAngle(Vector3 pPrev, Vector3 pCurr, Vector3 pNext)
+    {
+        // Vectors pointing from current vertex to neighbors, on XZ plane
+        Vector3 dirToPrev = (new Vector3(pPrev.x, 0, pPrev.z) - new Vector3(pCurr.x, 0, pCurr.z)).normalized;
+        Vector3 dirToNext = (new Vector3(pNext.x, 0, pNext.z) - new Vector3(pCurr.x, 0, pCurr.z)).normalized;
+
+        if (dirToPrev.sqrMagnitude < GeometryUtils.Epsilon || dirToNext.sqrMagnitude < GeometryUtils.Epsilon)
+        {
+            return 180f; // Collinear or zero length, treat as straight
+        }
+
+        float angle = Vector3.Angle(dirToPrev, dirToNext);
+        return angle;
     }
 
     void GenerateFacades()
@@ -98,73 +191,202 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
             GameObject sideParent = new GameObject($"Side_{i}");
             sideParent.transform.SetParent(generatedBuildingRoot.transform, false);
 
-            Vector3 p1 = vertexData[i].position;
-            Vector3 p2 = vertexData[(i + 1) % vertexData.Count].position;
-            Vector3 sideVector = p2 - p1;
-            float sideDistance = sideVector.magnitude;
+            Vector3 p1_vertex = vertexData[i].position;
+            int nextVertexIndex = (i + 1) % vertexData.Count;
+            Vector3 p2_vertex = vertexData[nextVertexIndex].position;
 
-            if (sideDistance < GeometryUtils.Epsilon) continue;
+            Vector3 sideVector = p2_vertex - p1_vertex;
+            float originalSideDistance = sideVector.magnitude;
+
+            if (originalSideDistance < GeometryUtils.Epsilon) continue;
 
             Vector3 sideDirection = sideVector.normalized;
-            Vector3 sideNormal = CalculateSideNormal(p1, p2);
-
-            int numSegments = CalculateNumSegments(sideDistance);
-            float actualSegmentWidth = CalculateSegmentWidth(sideDistance, numSegments);
+            Vector3 sideNormal = CalculateSideNormal(p1_vertex, p2_vertex);
 
             GetSidePrefabLists(i, out var currentGround, out var currentMiddle, out var currentMansard, out var currentAttic);
 
-            for (int j = 0; j < numSegments; j++)
+            // --- Adjustments for dedicated corners ---
+            float mansardStartCoverage = 0f;
+            float mansardEndCoverage = 0f;
+
+            MansardCornerSet startCornerSet = null;
+            bool hasStartMansardCorner = useMansardFloor && useDedicatedMansardCorners && _activeMansardCorners.TryGetValue(i, out startCornerSet);
+            if (hasStartMansardCorner)
             {
-                Vector3 segmentBaseHorizontalPos = p1 + sideDirection * (actualSegmentWidth * (j + 0.5f));
-                Quaternion baseSegmentRotation = Quaternion.LookRotation(sideNormal); // Only outward rotation
-                float currentBottomY = 0;
+                if (startCornerSet != null)
+                {
+                    mansardStartCoverage = startCornerSet.coverageAlongNextSide;
+                }
+            }
 
-                // Ground Floor
-                Vector3 groundFloorPivotPosition = segmentBaseHorizontalPos + Vector3.up * (currentBottomY + pivotOffsetVertical);
-                InstantiateFacadeSegment(currentGround, groundFloorPivotPosition, baseSegmentRotation, sideParent.transform, actualSegmentWidth, false);
+            MansardCornerSet endCornerSet = null;
+            bool hasEndMansardCorner = useMansardFloor && useDedicatedMansardCorners && _activeMansardCorners.TryGetValue(nextVertexIndex, out endCornerSet);
+            if (hasEndMansardCorner)
+            {
+                if (endCornerSet != null)
+                {
+                    mansardEndCoverage = endCornerSet.coverageAlongPrevSide;
+                }
+            }
+
+            float currentBottomY = 0;
+
+            // --- Ground Floor (No dedicated corner adjustments here, but could be added) ---
+            InstantiateSideSegments(p1_vertex, sideDirection, sideNormal, originalSideDistance, 0f, 0f,
+                                    currentGround, sideParent.transform, pivotOffsetVertical, currentBottomY, false);
+            currentBottomY += floorHeight;
+
+            // --- Middle Floors (No dedicated corner adjustments here) ---
+            for (int floor = 0; floor < middleFloors; floor++)
+            {
+                InstantiateSideSegments(p1_vertex, sideDirection, sideNormal, originalSideDistance, 0f, 0f,
+                                        currentMiddle, sideParent.transform, pivotOffsetVertical, currentBottomY, false);
                 currentBottomY += floorHeight;
+            }
 
-                // Middle Floors
-                for (int floor = 0; floor < middleFloors; floor++)
-                {
-                    Vector3 middleFloorPivotPosition = segmentBaseHorizontalPos + Vector3.up * (currentBottomY + pivotOffsetVertical);
-                    InstantiateFacadeSegment(currentMiddle, middleFloorPivotPosition, baseSegmentRotation, sideParent.transform, actualSegmentWidth, false);
-                    currentBottomY += floorHeight;
-                }
+            // --- Mansard Floor (With dedicated corner adjustments) ---
+            if (useMansardFloor)
+            {
+                InstantiateSideSegments(p1_vertex, sideDirection, sideNormal, originalSideDistance,
+                                        mansardStartCoverage, mansardEndCoverage,
+                                        currentMansard, sideParent.transform, pivotOffsetVertical, currentBottomY, false);
+                currentBottomY += floorHeight;
+            }
 
-                // Mansard Floor - Assuming prefab is pre-rotated and centered for floorHeight
-                if (useMansardFloor)
-                {
-                    Vector3 mansardFloorPivotPosition = segmentBaseHorizontalPos + Vector3.up * (currentBottomY + pivotOffsetVertical);
-                    InstantiateFacadeSegment(currentMansard, mansardFloorPivotPosition, baseSegmentRotation, sideParent.transform, actualSegmentWidth, false);
-                    currentBottomY += floorHeight;
-                }
-
-                // Attic Floor - Assuming prefab is pre-rotated and centered for floorHeight
-                if (useAtticFloor)
-                {
-                    Vector3 atticFloorPivotPosition = segmentBaseHorizontalPos + Vector3.up * (currentBottomY + pivotOffsetVertical);
-                    InstantiateFacadeSegment(currentAttic, atticFloorPivotPosition, baseSegmentRotation, sideParent.transform, actualSegmentWidth, false);
-                }
+            // --- Attic Floor (Placeholder for similar adjustments) ---
+            if (useAtticFloor)
+            {
+                // TODO: Add atticStartCoverage, atticEndCoverage logic if using dedicated attic corners
+                InstantiateSideSegments(p1_vertex, sideDirection, sideNormal, originalSideDistance, 0f, 0f, // Update coverage later
+                                        currentAttic, sideParent.transform, pivotOffsetVertical, currentBottomY, false);
+                // currentBottomY += floorHeight; // Only if attic contributes to overall height calculation this way
             }
         }
     }
 
+    // New helper method to instantiate segments for a side, considering coverage
+    void InstantiateSideSegments(Vector3 sideStartVertex, Vector3 sideDirection, Vector3 sideNormal,
+                                 float originalSideDistance, float startCoverage, float endCoverage,
+                                 List<GameObject> prefabs, Transform parent,
+                                 float pivotOffsetY, float baseLevelY, bool isCornerElement) // isCornerElement not really used here, but kept for signature similarity
+    {
+        if (prefabs == null || prefabs.Count == 0) return;
+
+        Vector3 effectiveSideStartPos = sideStartVertex + sideDirection * startCoverage;
+        float effectiveSideDistance = originalSideDistance - startCoverage - endCoverage;
+
+        if (effectiveSideDistance < nominalFacadeWidth * 0.1f && effectiveSideDistance < minSideLengthUnits * nominalFacadeWidth) // If too short, skip
+        {
+            if (effectiveSideDistance < 0) Debug.LogWarning($"Side {parent.name} has negative effective length ({effectiveSideDistance.ToString("F2")}) after corner coverage. Check coverage values. Original: {originalSideDistance}, StartCov: {startCoverage}, EndCov: {endCoverage}");
+            return;
+        }
+
+        int numSegments = CalculateNumSegments(effectiveSideDistance);
+        if (numSegments <= 0 && effectiveSideDistance > GeometryUtils.Epsilon) numSegments = 1; // Ensure at least one segment if there's some space
+        else if (numSegments <= 0) return;
+
+
+        float actualSegmentWidth = CalculateSegmentWidth(effectiveSideDistance, numSegments);
+        Quaternion baseSegmentRotation = Quaternion.LookRotation(sideNormal);
+
+        for (int j = 0; j < numSegments; j++)
+        {
+            Vector3 segmentBaseHorizontalPos = effectiveSideStartPos + sideDirection * (actualSegmentWidth * (j + 0.5f));
+            Vector3 segmentPivotPosition = segmentBaseHorizontalPos + Vector3.up * (baseLevelY + pivotOffsetY);
+            InstantiateFacadeSegment(prefabs, segmentPivotPosition, baseSegmentRotation, parent, actualSegmentWidth, false); // false for isCorner
+        }
+    }
+
+    void GenerateDedicatedWallCorners()
+    {
+        if (!useDedicatedMansardCorners /* && !useDedicatedAtticCorners (add later) */)
+        {
+            // If no dedicated corner types are enabled, no need to proceed.
+            return;
+        }
+        if (_activeMansardCorners.Count == 0 /* && _activeAtticCorners.Count == 0 (add later) */)
+        {
+            // If no corners matched any prefabs during PrecomputeCornerData
+            return;
+        }
+
+
+        GameObject dedicatedCornersParent = new GameObject(DEDICATED_WALL_CORNERS_NAME);
+        dedicatedCornersParent.transform.SetParent(generatedBuildingRoot.transform, false);
+
+        float pivotOffsetVertical = floorHeight * 0.5f; // Assuming dedicated corners also have centered pivots for their floorHeight slot
+
+        for (int i = 0; i < vertexData.Count; i++)
+        {
+            // We iterate through ALL vertices, as walls meet at every vertex.
+            int prevI = (i + vertexData.Count - 1) % vertexData.Count;
+            Vector3 currentPosRaw = vertexData[i].position;
+            Vector3 prevPos = vertexData[prevI].position;
+            Vector3 nextPos = vertexData[(i + 1) % vertexData.Count].position;
+
+            CalculateCornerTransform(prevPos, currentPosRaw, nextPos, out Vector3 cornerBaseHorizontalPos, out Quaternion baseCornerRotation);
+
+            // --- Mansard Dedicated Wall Corner ---
+            if (useMansardFloor && useDedicatedMansardCorners)
+            {
+                if (_activeMansardCorners.TryGetValue(i, out MansardCornerSet selectedSet))
+                {
+                    if (selectedSet.cornerAssemblyPrefab != null)
+                    {
+                        // Calculate Y position for the base of the Mansard floor level
+                        float mansardFloorSlotBaseY = floorHeight; // Ground floor height
+                        mansardFloorSlotBaseY += middleFloors * floorHeight; // Middle floors height
+
+                        Vector3 mansardCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (mansardFloorSlotBaseY + pivotOffsetVertical);
+
+                        GameObject cornerAssembly = Instantiate(selectedSet.cornerAssemblyPrefab, dedicatedCornersParent.transform);
+                        cornerAssembly.name = $"Mansard_WallCorner_{i}_{selectedSet.cornerAssemblyPrefab.name}";
+                        cornerAssembly.transform.position = mansardCornerPivotPos;
+                        cornerAssembly.transform.rotation = baseCornerRotation;
+                        // Scaling is assumed to be part of the prefab for dedicated corners.
+                    }
+                }
+            }
+
+            // --- Attic Dedicated Wall Corner (Placeholder for future) ---
+            // if (useAtticFloor && useDedicatedAtticCorners)
+            // {
+            //     if (_activeAtticCorners.TryGetValue(i, out AtticCornerSet selectedAtticSet)) // Assuming an AtticCornerSet type
+            //     {
+            //         if (selectedAtticSet.cornerAssemblyPrefab != null)
+            //         {
+            //             float atticFloorSlotBaseY = floorHeight; // Ground
+            //             atticFloorSlotBaseY += middleFloors * floorHeight; // Middles
+            //             if (useMansardFloor) atticFloorSlotBaseY += floorHeight; // Mansard
+            //
+            //             Vector3 atticCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (atticFloorSlotBaseY + pivotOffsetVertical);
+            //             // Instantiate attic corner assembly
+            //         }
+            //     }
+            // }
+        }
+    }
+
+
     void GenerateCornerElements()
     {
-        bool hasCornerBodyPrefabs = cornerElementPrefabs != null && cornerElementPrefabs.Count > 0;
+        bool hasGenericCornerBodyPrefabs = cornerElementPrefabs != null && cornerElementPrefabs.Count > 0;
         bool hasCornerCapPrefabs = useCornerCaps && cornerCapPrefabs != null && cornerCapPrefabs.Count > 0;
 
-        if (!hasCornerBodyPrefabs && !hasCornerCapPrefabs) return;
+        if (!hasGenericCornerBodyPrefabs && !hasCornerCapPrefabs)
+        {
+            Debug.Log("No generic corner body or cap prefabs assigned; skipping chimney generation.");
+            return;
+        }
 
-        GameObject cornersParent = new GameObject(CORNERS_NAME);
-        cornersParent.transform.SetParent(generatedBuildingRoot.transform, false);
+        GameObject chimneyParent = new GameObject(CORNERS_NAME);
+        chimneyParent.transform.SetParent(generatedBuildingRoot.transform, false);
 
-        // Pivot offset for body elements, assuming their pivots are centered vertically within their nominal 'floorHeight'
         float pivotOffsetVertical = floorHeight * 0.5f;
 
         for (int i = 0; i < vertexData.Count; i++)
         {
+            // ONLY build a chimney stack if this vertex is marked for it.
             if (!vertexData[i].addCornerElement) continue;
 
             int prevI = (i + vertexData.Count - 1) % vertexData.Count;
@@ -173,84 +395,80 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
             Vector3 nextPos = vertexData[(i + 1) % vertexData.Count].position;
 
             CalculateCornerTransform(prevPos, currentPosRaw, nextPos, out Vector3 cornerBaseHorizontalPos, out Quaternion baseCornerRotation);
-            // cornerBaseHorizontalPos is the XZ position for the corner, its Y component is 0 from vertexData.
+            float cornerWidth = nominalFacadeWidth; // Default width for chimney elements
 
-            // This variable tracks the Y-coordinate for the *base* of the current nominal floorHeight slot.
-            // Body elements are placed with their pivots centered within these nominal slots.
-            float nominalCurrentElementBaseY = 0;
-            float cornerWidth = nominalFacadeWidth; // Width for corner elements
+            float nominalCurrentElementBaseY = 0; // Reset Y for each chimney stack
 
-            if (hasCornerBodyPrefabs)
+            // Ground Floor Chimney Segment
+            if (hasGenericCornerBodyPrefabs)
             {
-                // Ground Floor Corner Element
-                // The pivot of the ground element is at (nominalCurrentElementBaseY + pivotOffsetVertical)
                 Vector3 groundCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (nominalCurrentElementBaseY + pivotOffsetVertical);
-                InstantiateFacadeSegment(cornerElementPrefabs, groundCornerPivotPos, baseCornerRotation, cornersParent.transform, cornerWidth, true);
-                nominalCurrentElementBaseY += floorHeight; // Advance to the base of the next nominal slot
+                InstantiateFacadeSegment(cornerElementPrefabs, groundCornerPivotPos, baseCornerRotation, chimneyParent.transform, cornerWidth, true);
+            }
+            nominalCurrentElementBaseY += floorHeight;
 
-                // Middle Floor Corner Elements
+            // Middle Floor Chimney Segments
+            if (hasGenericCornerBodyPrefabs)
+            {
                 for (int floor = 0; floor < middleFloors; floor++)
                 {
                     Vector3 middleCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (nominalCurrentElementBaseY + pivotOffsetVertical);
-                    InstantiateFacadeSegment(cornerElementPrefabs, middleCornerPivotPos, baseCornerRotation, cornersParent.transform, cornerWidth, true);
+                    InstantiateFacadeSegment(cornerElementPrefabs, middleCornerPivotPos, baseCornerRotation, chimneyParent.transform, cornerWidth, true);
                     nominalCurrentElementBaseY += floorHeight;
                 }
+            }
+            else
+            {
+                nominalCurrentElementBaseY += floorHeight * middleFloors; // Still advance Y if no prefabs
+            }
 
-                // Mansard Floor Corner Element
-                // Assumed to be pre-rotated and centered for 'floorHeight' (its original unrotated height).
-                // It's placed in its nominal slot. Its actual vertical contribution will be less if angled.
-                if (useMansardFloor)
+            // Mansard Floor Chimney Segment (Uses generic cornerElementPrefabs)
+            if (useMansardFloor)
+            {
+                if (hasGenericCornerBodyPrefabs)
                 {
                     Vector3 mansardCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (nominalCurrentElementBaseY + pivotOffsetVertical);
-                    InstantiateFacadeSegment(cornerElementPrefabs, mansardCornerPivotPos, baseCornerRotation, cornersParent.transform, cornerWidth, true);
-                    nominalCurrentElementBaseY += floorHeight;
+                    InstantiateFacadeSegment(cornerElementPrefabs, mansardCornerPivotPos, baseCornerRotation, chimneyParent.transform, cornerWidth, true);
                 }
+                nominalCurrentElementBaseY += floorHeight;
+            }
 
-                // Attic Floor Corner Element
-                // Similar assumptions as Mansard.
-                if (useAtticFloor)
+            // Attic Floor Chimney Segment (Uses generic cornerElementPrefabs)
+            if (useAtticFloor)
+            {
+                if (hasGenericCornerBodyPrefabs)
                 {
                     Vector3 atticCornerPivotPos = cornerBaseHorizontalPos + Vector3.up * (nominalCurrentElementBaseY + pivotOffsetVertical);
-                    //InstantiateFacadeSegment(cornerElementPrefabs, atticCornerPivotPos, baseCornerRotation, cornersParent.transform, cornerWidth, true);
-                    // No need to increment nominalCurrentElementBaseY if this is the last body part before the cap.
-                    //nominalCurrentElementBaseY += floorHeight; 
+                    //InstantiateFacadeSegment(cornerElementPrefabs, atticCornerPivotPos, baseCornerRotation, chimneyParent.transform, cornerWidth, true);
                 }
+                //nominalCurrentElementBaseY += floorHeight; // Advance Y for cap placement
             }
 
+            // Chimney Cap
             if (hasCornerCapPrefabs)
             {
-                // Calculate the actual Y-coordinate for the base of the cap.
-                // This should be the sum of the true vertical rises of all body elements that form this corner.
-                float capBaseY = 0;
-
-                // Only sum heights if body prefabs are actually used for this corner.
-                // If not, capBaseY remains 0, and the cap is placed at ground level.
-                if (hasCornerBodyPrefabs)
-                {
-                    // Ground floor actual vertical contribution
-                    capBaseY += floorHeight;
-
-                    // Middle floors actual vertical contribution
-                    capBaseY += middleFloors * floorHeight;
-
-                    // Mansard floor actual vertical contribution
-                    if (useMansardFloor)
-                    {
-                        capBaseY += floorHeight;
-                    }
-
-                    // Attic floor actual vertical contribution
-                    if (useAtticFloor)
-                    {
-                        //capBaseY += floorHeight;
-                    }
-                }
-
-                // capPosition is the world position for the base of the cap prefab.
-                Vector3 capPosition = cornerBaseHorizontalPos + Vector3.up * capBaseY;
-                // Assuming cap prefab's pivot is at its base.
-                InstantiateFacadeSegment(cornerCapPrefabs, capPosition, baseCornerRotation, cornersParent.transform, cornerWidth, true);
+                Vector3 capPosition = cornerBaseHorizontalPos + Vector3.up * nominalCurrentElementBaseY;
+                InstantiateFacadeSegment(cornerCapPrefabs, capPosition, baseCornerRotation, chimneyParent.transform, cornerWidth, true);
             }
+        }
+    }
+
+    void InstantiateFacadeSegment(List<GameObject> prefabList, Vector3 worldPosition, Quaternion worldRotation, Transform parent, float segmentWidth, bool isCorner)
+    {
+        if (prefabList == null || prefabList.Count == 0) return;
+        int randomIndex = Random.Range(0, prefabList.Count);
+        GameObject prefab = prefabList[randomIndex];
+        if (prefab == null) return;
+
+        GameObject instance = Instantiate(prefab, parent);
+        instance.transform.position = worldPosition;
+        instance.transform.rotation = worldRotation;
+
+        if (!isCorner && scaleFacadesToFitSide && nominalFacadeWidth > GeometryUtils.Epsilon && Mathf.Abs(segmentWidth - nominalFacadeWidth) > GeometryUtils.Epsilon)
+        {
+            Vector3 localScale = instance.transform.localScale;
+            float scaleFactor = segmentWidth / nominalFacadeWidth;
+            instance.transform.localScale = new Vector3(localScale.x * scaleFactor, localScale.y, localScale.z);
         }
     }
 
@@ -462,25 +680,6 @@ public class PolygonBuildingGeneratorAdj : MonoBehaviour
             middle = defaultMiddleFloorPrefabs;
             mansard = defaultMansardFloorPrefabs;
             attic = defaultAtticFloorPrefabs;
-        }
-    }
-
-    void InstantiateFacadeSegment(List<GameObject> prefabList, Vector3 worldPosition, Quaternion worldRotation, Transform parent, float segmentWidth, bool isCorner)
-    {
-        if (prefabList == null || prefabList.Count == 0) return;
-        int randomIndex = Random.Range(0, prefabList.Count);
-        GameObject prefab = prefabList[randomIndex];
-        if (prefab == null) return;
-
-        GameObject instance = Instantiate(prefab, parent);
-        instance.transform.position = worldPosition;
-        instance.transform.rotation = worldRotation;
-
-        if (!isCorner && scaleFacadesToFitSide && nominalFacadeWidth > GeometryUtils.Epsilon && Mathf.Abs(segmentWidth - nominalFacadeWidth) > GeometryUtils.Epsilon)
-        {
-            Vector3 localScale = instance.transform.localScale;
-            float scaleFactor = segmentWidth / nominalFacadeWidth;
-            instance.transform.localScale = new Vector3(localScale.x * scaleFactor, localScale.y, localScale.z);
         }
     }
 
