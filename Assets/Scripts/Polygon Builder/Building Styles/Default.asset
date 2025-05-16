@@ -51,3 +51,7 @@ MonoBehaviour:
   - {fileID: 3716927854529544225, guid: 297e9ae0173feed498e06d4fe8af2969, type: 3}
   defaultChimneyCapPrefabs:
   - {fileID: 5603749693001070441, guid: c0e1820a5d2f4574d8513a3302d6fb5b, type: 3}
+  defaultMansardWindowPrefabs:
+  - {fileID: 757365691267042281, guid: ba10f59d934614644b1d753a1dd719d7, type: 3}
+  defaultAtticWindowPrefabs:
+  - {fileID: 6023926734824447198, guid: 3fd23d9e5f228d54fac1963990d13991, type: 3}

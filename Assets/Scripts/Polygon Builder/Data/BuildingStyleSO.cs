@@ -17,4 +17,8 @@ public class BuildingStyleSO : ScriptableObject
     [Header("Default Corner Elements (Chimneys)")]
     public List<GameObject> defaultChimneyBodyPrefabs;
     public List<GameObject> defaultChimneyCapPrefabs;
+
+    [Header("Default Roof Window Prefabs")]
+    public List<GameObject> defaultMansardWindowPrefabs;
+    public List<GameObject> defaultAtticWindowPrefabs;
 }

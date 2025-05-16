@@ -2,7 +2,7 @@
 using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic; // Required for List if not in global namespace
-using System.Linq; // For roof outline drawing
+// Removed: using System.Linq; // No longer directly needed here
 
 [CustomEditor(typeof(PolygonBuildingGeneratorMain))]
 public class PolygonBuildingGeneratorMainEditor : Editor
@@ -15,12 +15,10 @@ public class PolygonBuildingGeneratorMainEditor : Editor
     private SerializedProperty _vertexDataProp;
     private SerializedProperty _sideDataProp;
     private SerializedProperty _middleFloorsProp;
-    // Removed: SerializedProperties for roof parameters
 
     private const float HANDLE_SIZE_MULTIPLIER = 0.2f;
     private const float DEBUG_GIZMO_NORMAL_LENGTH = 1.5f;
     private const float HEIGHT_HANDLE_SIZE_MULTIPLIER = 0.8f;
-    // Removed: ROOF_PARAM_HANDLE_SIZE_MULTIPLIER
 
     private void OnEnable()
     {
@@ -32,7 +30,6 @@ public class PolygonBuildingGeneratorMainEditor : Editor
             _vertexDataProp = serializedObject.FindProperty("vertexData");
             _sideDataProp = serializedObject.FindProperty("sideData");
             _middleFloorsProp = serializedObject.FindProperty("middleFloors");
-            // Removed: Initialization of roof parameter SerializedProperties
 
             _targetScript.SynchronizeSideData();
             if (!Application.isPlaying) EditorUtility.SetDirty(_targetScript);
@@ -73,10 +70,11 @@ public class PolygonBuildingGeneratorMainEditor : Editor
 
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("Other Building Settings", EditorStyles.boldLabel);
+        // Remove _debug* properties as they no longer exist on the target script
         string[] propertiesToExclude = {
-            "m_Script", "buildingStyle", "vertexData", "sideData",
-            "_debugFlatRoofMesh", "_debugFlatRoofTransform", "_debugMansardMesh",
-            "_debugMansardTransform", "_debugAtticMesh", "_debugAtticTransform"
+            "m_Script", "buildingStyle", "vertexData", "sideData"
+            // "_debugFlatRoofMesh", "_debugFlatRoofTransform", "_debugMansardMesh", (Removed)
+            // "_debugMansardTransform", "_debugAtticMesh", "_debugAtticTransform" (Removed)
         };
         DrawPropertiesExcluding(serializedObject, propertiesToExclude);
 
@@ -205,20 +203,19 @@ public class PolygonBuildingGeneratorMainEditor : Editor
         if (vertexCount >= 3 && _targetScript.floorHeight > GeometryUtils.Epsilon)
         {
             if (DrawHeightAdjustmentHandle(worldVertices)) changedByHandle = true;
-            // Removed calls to DrawRoofParameterHandles
         }
 
         if (changedByHandle)
         {
             serializedObject.ApplyModifiedProperties();
             EditorUtility.SetDirty(_targetScript);
-            if (e.type == EventType.Used || e.type == EventType.MouseUp) // Regenerate on handle interaction completion
+            if (e.type == EventType.Used || e.type == EventType.MouseUp)
             {
                 RequestRegenerateAndRepaint();
             }
         }
 
-        DrawRoofOutlines();
+        // Removed: DrawRoofOutlines();
     }
 
     private void AddVertex()
@@ -246,14 +243,12 @@ public class PolygonBuildingGeneratorMainEditor : Editor
         }
         newPosProp.vector3Value = _targetScript.SnapVertexPosition(newVertexPos);
         newCornerFlagProp.boolValue = true;
-        // ApplyModifiedProperties will be called by the button action or at end of OnSceneGUI
     }
 
     private void RemoveLastVertex()
     {
         if (_vertexDataProp == null || _vertexDataProp.arraySize <= 0) return;
         _vertexDataProp.DeleteArrayElementAtIndex(_vertexDataProp.arraySize - 1);
-        // ApplyModifiedProperties will be called by the button action or at end of OnSceneGUI
     }
 
     private void SnapAllVertices()
@@ -334,7 +329,7 @@ public class PolygonBuildingGeneratorMainEditor : Editor
         baseCenter_world /= worldPolygonBaseVertices.Length;
 
         float currentMainWallHeight_local = (_middleFloorsProp.intValue + 1) * _targetScript.floorHeight;
-        Vector3 baseCenter_local = _targetTransform.InverseTransformPoint(baseCenter_world); // Get center in local space
+        Vector3 baseCenter_local = _targetTransform.InverseTransformPoint(baseCenter_world);
         Vector3 handlePosition_world = _targetTransform.TransformPoint(new Vector3(baseCenter_local.x, currentMainWallHeight_local, baseCenter_local.z));
 
         float handleDrawSize = HandleUtility.GetHandleSize(handlePosition_world) * HEIGHT_HANDLE_SIZE_MULTIPLIER;
@@ -363,65 +358,7 @@ public class PolygonBuildingGeneratorMainEditor : Editor
         return changed;
     }
 
-    // Removed: DrawRoofParameterHandles method
-
-    private void DrawRoofOutlines()
-    {
-        if (_targetScript == null) return;
-        if (_targetScript._debugFlatRoofMesh != null && _targetScript._debugFlatRoofTransform != null)
-        {
-            DrawMeshPerimeter(_targetScript._debugFlatRoofMesh, _targetScript._debugFlatRoofTransform, Color.yellow);
-        }
-        if (_targetScript._debugMansardMesh != null && _targetScript._debugMansardTransform != null)
-        {
-            DrawStripMeshOutlines(_targetScript._debugMansardMesh, _targetScript._debugMansardTransform, Color.blue);
-        }
-        if (_targetScript._debugAtticMesh != null && _targetScript._debugAtticTransform != null)
-        {
-            DrawStripMeshOutlines(_targetScript._debugAtticMesh, _targetScript._debugAtticTransform, Color.red);
-        }
-    }
-
-    private void DrawMeshPerimeter(Mesh mesh, Transform meshTransform, Color color)
-    {
-        if (mesh == null || meshTransform == null || mesh.vertexCount < 3) return;
-        Handles.color = color;
-        Vector3[] vertices = mesh.vertices;
-        int[] triangles = mesh.triangles;
-        for (int i = 0; i < triangles.Length; i += 3)
-        {
-            Vector3 p1 = meshTransform.TransformPoint(vertices[triangles[i]]);
-            Vector3 p2 = meshTransform.TransformPoint(vertices[triangles[i + 1]]);
-            Vector3 p3 = meshTransform.TransformPoint(vertices[triangles[i + 2]]);
-            Handles.DrawLine(p1, p2);
-            Handles.DrawLine(p2, p3);
-            Handles.DrawLine(p3, p1);
-        }
-    }
-
-    private void DrawStripMeshOutlines(Mesh mesh, Transform meshTransform, Color color)
-    {
-        if (mesh == null || meshTransform == null || mesh.vertexCount < 6) return;
-        Handles.color = color;
-        Vector3[] vertices = mesh.vertices;
-        int numOuterVertices = vertices.Length / 2;
-
-        List<Vector3> worldOuterLoop = new List<Vector3>();
-        for (int i = 0; i < numOuterVertices; i++) worldOuterLoop.Add(meshTransform.TransformPoint(vertices[i]));
-        List<Vector3> worldInnerLoop = new List<Vector3>();
-        for (int i = 0; i < numOuterVertices; i++) worldInnerLoop.Add(meshTransform.TransformPoint(vertices[i + numOuterVertices]));
-
-        if (worldOuterLoop.Count > 1)
-        {
-            Handles.DrawPolyLine(worldOuterLoop.ToArray());
-            Handles.DrawLine(worldOuterLoop.Last(), worldOuterLoop.First());
-        }
-        if (worldInnerLoop.Count > 1)
-        {
-            Handles.DrawPolyLine(worldInnerLoop.ToArray());
-            Handles.DrawLine(worldInnerLoop.Last(), worldInnerLoop.First());
-        }
-    }
+    // Removed: DrawRoofOutlines, DrawMeshPerimeter, DrawStripMeshOutlines methods
 
     private void MarkSceneDirty()
     {
