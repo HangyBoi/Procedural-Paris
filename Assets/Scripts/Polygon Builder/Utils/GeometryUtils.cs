@@ -125,7 +125,7 @@ public static class GeometryUtils
                 // Add the triangle indices ensuring CCW order for Unity normals.
                 if (isClockwise)
                 {
-/*                    // Input was CW, so reverse order B, C to get CCW (A, C, B)
+/*                  // Input was CW, so reverse order B, C to get CCW (A, C, B)
                     triangles.Add(prevIndex);
                     triangles.Add(nextIndex); // C
                     triangles.Add(currIndex); // B*/
@@ -138,7 +138,7 @@ public static class GeometryUtils
                 }
                 else // Input was CCW
                 {
-/*                    // Input was CCW, so natural order (A, B, C) is already CCW
+/*                  // Input was CCW, so natural order (A, B, C) is already CCW
                     triangles.Add(prevIndex);
                     triangles.Add(currIndex); // B
                     triangles.Add(nextIndex); // C*/
@@ -162,13 +162,7 @@ public static class GeometryUtils
                 if (currentIndex >= remainingVertices && remainingVertices > 3) // Check needed?
                 {
                     Debug.LogError($"Ear Clipping: Failed to find an ear after checking all vertices ({remainingVertices} remaining). LoopCounter: {loopSafetyCounter}. Polygon might be invalid.");
-                    // You might attempt some recovery here, or just fail.
-                    // Forcing a clip might lead to bad geometry.
-                    // Example: Force remove the current vertex and try again (risky)
-                    // indices.RemoveAt(currVIndex);
-                    // remainingVertices--;
-                    // currentIndex = 0;
-                    return false; // Safer to fail
+                    return false;
                 }
             }
         }
@@ -179,7 +173,7 @@ public static class GeometryUtils
             // --- APPLY CONSISTENT FIX HERE TOO ---
             if (isClockwise)
             {
-/*                // Input was CW, reverse order 1, 2 to get CCW (0, 2, 1)
+/*              // Input was CW, reverse order 1, 2 to get CCW (0, 2, 1)
                 triangles.Add(indices[0]);
                 triangles.Add(indices[2]); // 2
                 triangles.Add(indices[1]); // 1*/
@@ -191,7 +185,7 @@ public static class GeometryUtils
             }
             else // Input was CCW
             {
-/*                // Input was CCW, so natural order (0, 1, 2) is already CCW
+/*              // Input was CCW, so natural order (0, 1, 2) is already CCW
                 triangles.Add(indices[0]);
                 triangles.Add(indices[1]); // 1
                 triangles.Add(indices[2]); // 2*/
