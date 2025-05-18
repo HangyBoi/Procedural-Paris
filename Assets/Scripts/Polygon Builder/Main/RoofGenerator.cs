@@ -243,6 +243,10 @@ public class RoofGenerator
             Debug.LogWarning($"CreateMeshObject: Material for '{gameObjectName}' is null. Object will likely be invisible or use default pink.");
         }
 
+        // Add MeshCollider for raycasting
+        MeshCollider mc = meshObject.AddComponent<MeshCollider>();
+        mc.sharedMesh = mesh;
+
         return meshObject;
     }
 

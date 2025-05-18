@@ -27,7 +27,7 @@ Transform:
   m_GameObject: {fileID: 1581367866775550805}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 307.97705, y: 372.54883, z: 0.09910015}
+  m_LocalPosition: {x: 0, y: 316, z: 0}
   m_LocalScale: {x: 100, y: 100, z: 100}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -112,7 +112,7 @@ Transform:
   m_GameObject: {fileID: 3677692554203185433}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 307.97705, y: 372.54883, z: 0.09910015}
+  m_LocalPosition: {x: 0, y: 316, z: 0}
   m_LocalScale: {x: 100, y: 100, z: 100}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -155,7 +155,7 @@ MeshRenderer:
   m_StaticBatchRoot: {fileID: 0}
   m_ProbeAnchor: {fileID: 0}
   m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
+  m_ScaleInLightmap: 1.2282962
   m_ReceiveGI: 1
   m_PreserveUVs: 0
   m_IgnoreNormalsForChartDetection: 0
@@ -198,7 +198,7 @@ Transform:
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 0.01, y: 0.01, z: 0.01}
-  m_ConstrainProportionsScale: 0
+  m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 6101196359102013213}
   - {fileID: 4742857697614735593}
@@ -213,7 +213,7 @@ LODGroup:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6023926734824447198}
   serializedVersion: 2
-  m_LocalReferencePoint: {x: 288.0669, y: 343.79446, z: -0.0029144287}
+  m_LocalReferencePoint: {x: -0.10202026, y: 287.24564, z: 19.910095}
   m_Size: 559.3979
   m_FadeMode: 0
   m_AnimateCrossFading: 0
@@ -259,7 +259,7 @@ Transform:
   m_GameObject: {fileID: 8564397054395132614}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 307.97705, y: 372.54883, z: 0.09910015}
+  m_LocalPosition: {x: 0, y: 316, z: 0}
   m_LocalScale: {x: 100, y: 100, z: 100}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -302,7 +302,7 @@ MeshRenderer:
   m_StaticBatchRoot: {fileID: 0}
   m_ProbeAnchor: {fileID: 0}
   m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
+  m_ScaleInLightmap: 1.3525395
   m_ReceiveGI: 1
   m_PreserveUVs: 0
   m_IgnoreNormalsForChartDetection: 0

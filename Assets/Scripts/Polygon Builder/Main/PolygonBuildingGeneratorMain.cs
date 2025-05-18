@@ -18,16 +18,16 @@ public class PolygonBuildingGeneratorMain : MonoBehaviour
     public List<PolygonSideData> sideData = new List<PolygonSideData>();
 
     [Header("Polygon Editing Settings")]
-    public float vertexSnapSize = 1.0f; // Adjusted back from 10 for typical use
+    public float vertexSnapSize = 10.0f;
     public int minSideLengthUnits = 1;
 
     [Header("Building Structure Settings")]
     public int middleFloors = 3;
-    public float floorHeight = 3.0f; // Adjusted back from 10
+    public float floorHeight = 10.0f;
 
     [Header("Facade Placement Settings")]
     public bool scaleFacadesToFitSide = true;
-    public float nominalFacadeWidth = 1.0f; // Adjusted back from 10
+    public float nominalFacadeWidth = 10.0f;
 
     [Header("Corner Element Settings")]
     public bool useCornerCaps = true;
@@ -46,30 +46,35 @@ public class PolygonBuildingGeneratorMain : MonoBehaviour
     public float atticRiseHeight = 1.5f;
 
     [Header("Top Roof Settings")]
-    public float flatRoofEdgeOffset = 0.0f;
     public Material roofMaterial;
+    public float flatRoofEdgeOffset = 0.0f;
     public float roofUvScale = 1.0f;
 
     [Header("Roof Window Settings")]
     public bool placeMansardWindows = true;
     public bool placeAtticWindows = true;
-    [Tooltip("How much to inset windows into the roof surface, relative to the roof surface normal. Positive pushes in, negative out.")]
-    public float roofWindowInset = 0.05f; // Small value
+    public float mansardWindowInset = 0.05f;
+    public float atticWindowInset = 0.05f;
     public bool scaleRoofWindowsToFitSegment = false;
+
+    [Header("Roof Window Generation Minima/Maxima")]
+    public float maxMansardHDistForWindows = 8.0f;
+    public float minMansardRiseForWindows = 3.0f;
+    public float maxAtticHDistForWindows = 30.0f;
+    public float minAtticRiseForWindows = 10.0f;
 
     private GameObject _generatedBuildingRoot;
     private const string ROOT_NAME = "Generated Building";
     private const string FACADES_ROOT_NAME = "Facade Elements";
     private const string CORNERS_ROOT_NAME = "Corner Elements";
     private const string ROOF_ROOT_NAME = "Roof Elements";
-    private const string ROOF_WINDOWS_ROOT_NAME = "Roof Windows"; // New root for roof windows
+    private const string ROOF_WINDOWS_ROOT_NAME = "Roof Windows";
 
-    // Removed: _debug* roof mesh/transform variables
 
     private FacadeGenerator _facadeGenerator;
     private CornerGenerator _cornerGenerator;
     private RoofGenerator _roofGenerator;
-    private RoofWindowGenerator _roofWindowManager; // New manager
+    private RoofWindowGenerator _roofWindowManager;
 
     public void GenerateBuilding()
     {
@@ -93,7 +98,7 @@ public class PolygonBuildingGeneratorMain : MonoBehaviour
         _facadeGenerator = new FacadeGenerator(this, vertexData, sideData, buildingStyle);
         _cornerGenerator = new CornerGenerator(this, vertexData, buildingStyle);
         _roofGenerator = new RoofGenerator(this, vertexData, buildingStyle);
-        _roofWindowManager = new RoofWindowGenerator(this, vertexData, sideData, buildingStyle); // Initialize
+        _roofWindowManager = new RoofWindowGenerator(this, vertexData, sideData, buildingStyle);
 
         Transform facadesParent = new GameObject(FACADES_ROOT_NAME).transform;
         facadesParent.SetParent(_generatedBuildingRoot.transform, false);
@@ -101,17 +106,14 @@ public class PolygonBuildingGeneratorMain : MonoBehaviour
         cornersParent.SetParent(_generatedBuildingRoot.transform, false);
         Transform roofParent = new GameObject(ROOF_ROOT_NAME).transform;
         roofParent.SetParent(_generatedBuildingRoot.transform, false);
-        Transform roofWindowsParent = new GameObject(ROOF_WINDOWS_ROOT_NAME).transform; // Create parent for roof windows
-        roofWindowsParent.SetParent(roofParent, false); // Child of main roof container
+        Transform roofWindowsParent = new GameObject(ROOF_WINDOWS_ROOT_NAME).transform;
+        roofWindowsParent.SetParent(roofParent, false);
 
 
         _facadeGenerator.GenerateAllFacades(facadesParent);
         _cornerGenerator.GenerateAllCorners(cornersParent);
 
-        // Generate roof meshes first
         GeneratedRoofObjects generatedRoofs = _roofGenerator.GenerateMainRoof(roofParent);
-
-        // Then generate windows onto these roofs
         _roofWindowManager.GenerateAllWindows(roofWindowsParent, generatedRoofs);
     }
 
@@ -162,5 +164,10 @@ public class PolygonBuildingGeneratorMain : MonoBehaviour
         mansardRiseHeight = Mathf.Max(0, mansardRiseHeight);
         atticSlopeHorizontalDistance = Mathf.Max(0, atticSlopeHorizontalDistance);
         atticRiseHeight = Mathf.Max(0, atticRiseHeight);
+
+        minMansardRiseForWindows = Mathf.Max(0f, minMansardRiseForWindows);
+        maxMansardHDistForWindows = Mathf.Max(0f, maxMansardHDistForWindows);
+        minAtticRiseForWindows = Mathf.Max(0f, minAtticRiseForWindows);
+        maxAtticHDistForWindows = Mathf.Max(0f, maxAtticHDistForWindows);
     }
 }

@@ -27,10 +27,10 @@ public class CornerGenerator
         bool hasCornerBodyPrefabs = _buildingStyle.defaultChimneyBodyPrefabs != null && _buildingStyle.defaultChimneyBodyPrefabs.Count > 0;
         bool hasCornerCapPrefabs = _settings.useCornerCaps && _buildingStyle.defaultChimneyCapPrefabs != null && _buildingStyle.defaultChimneyCapPrefabs.Count > 0;
 
-        if (!hasCornerBodyPrefabs && !hasCornerCapPrefabs) return; // Nothing to generate
+        if (!hasCornerBodyPrefabs && !hasCornerCapPrefabs) return; // Nothing to generate if no prefabs for either
 
-        // Pivot offset to center prefabs vertically, assuming pivot is at base
-        float pivotOffsetVertical = _settings.floorHeight * 0.5f;
+        float chimneyBodyPrefabHeight = _settings.floorHeight; // Assuming chimney body prefabs are designed for one floorHeight
+        float pivotOffsetVertical = chimneyBodyPrefabHeight * 0.5f; // Pivot offset to center prefabs vertically
 
         for (int i = 0; i < _vertexData.Count; i++)
         {
@@ -41,60 +41,72 @@ public class CornerGenerator
             Vector3 prevPos_local = _vertexData[prevI].position;
             Vector3 nextPos_local = _vertexData[(i + 1) % _vertexData.Count].position;
 
-            // Calculate the position and orientation for the corner element
             CalculateCornerTransform(prevPos_local, currentPos_local, nextPos_local,
                                      out Vector3 cornerBaseHorizontalPos_local, out Quaternion baseCornerRotation_local);
 
-            float currentElementBaseY = 0;
+            float currentElementBaseY_local = 0; // Tracks the Y position for the base of the *next* element
             float cornerElementWidth = _settings.nominalFacadeWidth;
 
+            int totalBodySegments = 1; // For ground floor
+            totalBodySegments += _settings.middleFloors;
+
+            // Add a segment for the mansard level if it exists and has height
+            if (_settings.useMansardFloor && _settings.mansardRiseHeight > GeometryUtils.Epsilon)
+            {
+                totalBodySegments += 1;
+            }
+
+            // Add a segment for the attic level if it exists and has height
+            if (_settings.useAtticFloor && _settings.atticRiseHeight > GeometryUtils.Epsilon)
+            {
+                totalBodySegments += 1;
+            }
 
             // --- Corner Element Bodies (e.g., Chimneys) ---
             if (hasCornerBodyPrefabs)
             {
-                // Ground floor level corner element LOCAL position
-                Vector3 groundCornerPivotPos_local = cornerBaseHorizontalPos_local + Vector3.up * (currentElementBaseY + pivotOffsetVertical);
-
-                // Convert to WORLD SPACE
-                Vector3 groundCornerPivotPos_world = _settings.transform.TransformPoint(groundCornerPivotPos_local);
-                Quaternion baseCornerRotation_world = _settings.transform.rotation * baseCornerRotation_local;
-
-                PrefabInstantiator.InstantiateSegment(_buildingStyle.defaultChimneyBodyPrefabs, groundCornerPivotPos_world, baseCornerRotation_world,
-                                                      cornerRoot, cornerElementWidth, true,
-                                                      false, _settings.nominalFacadeWidth);
-                currentElementBaseY += _settings.floorHeight;
-
-                // Middle floor levels corner elements
-                for (int floor = 0; floor < _settings.middleFloors; floor++)
+                for (int segmentIndex = 0; segmentIndex < totalBodySegments; segmentIndex++)
                 {
-                    // LOCAL SPACE pivot position
-                    Vector3 middleCornerPivotPos_local = cornerBaseHorizontalPos_local + Vector3.up * (currentElementBaseY + pivotOffsetVertical);
+                    // LOCAL SPACE pivot position for the current segment
+                    Vector3 segmentPivotPos_local = cornerBaseHorizontalPos_local + Vector3.up * (currentElementBaseY_local + pivotOffsetVertical);
 
                     // Convert to WORLD SPACE
-                    Vector3 middleCornerPivotPos_world = _settings.transform.TransformPoint(middleCornerPivotPos_local);
-                    // baseCornerRotation_world is the same as for ground floor
+                    Vector3 segmentPivotPos_world = _settings.transform.TransformPoint(segmentPivotPos_local);
+                    Quaternion baseCornerRotation_world = _settings.transform.rotation * baseCornerRotation_local;
 
-                    PrefabInstantiator.InstantiateSegment(_buildingStyle.defaultChimneyBodyPrefabs, middleCornerPivotPos_world, baseCornerRotation_world,
-                                                          cornerRoot, cornerElementWidth, true,
-                                                          false, _settings.nominalFacadeWidth);
-                    currentElementBaseY += _settings.floorHeight;
+                    PrefabInstantiator.InstantiateSegment(
+                        _buildingStyle.defaultChimneyBodyPrefabs, segmentPivotPos_world, baseCornerRotation_world,
+                        cornerRoot, cornerElementWidth, true,
+                        false, _settings.nominalFacadeWidth);
+
+                    currentElementBaseY_local += chimneyBodyPrefabHeight; // Advance base for the next segment
                 }
             }
+            else
+            {
+                // If there are no body prefabs, but we might place a cap,
+                // the cap should be placed as if the bodies existed.
+                // So, calculate where the top of these hypothetical bodies would be.
+                currentElementBaseY_local = chimneyBodyPrefabHeight * totalBodySegments;
+            }
+
 
             // --- Corner Caps ---
+            // The cap is placed on top of all body segments (real or hypothetical).
+            // currentElementBaseY_local now represents the Y where the base of the cap should be.
             if (hasCornerCapPrefabs)
             {
-                float capBaseY = _settings.floorHeight * (1 + _settings.middleFloors);
-                // LOCAL SPACE cap position
-                Vector3 capPosition_local = cornerBaseHorizontalPos_local + Vector3.up * capBaseY;
+                // LOCAL SPACE cap position (pivot at base of cap)
+                Vector3 capPosition_local = cornerBaseHorizontalPos_local + Vector3.up * currentElementBaseY_local;
 
                 // Convert to WORLD SPACE
                 Vector3 capPosition_world = _settings.transform.TransformPoint(capPosition_local);
-                Quaternion baseCornerRotation_world = _settings.transform.rotation * baseCornerRotation_local; // Same world rotation
+                Quaternion baseCornerRotation_world = _settings.transform.rotation * baseCornerRotation_local;
 
-                PrefabInstantiator.InstantiateSegment(_buildingStyle.defaultChimneyCapPrefabs, capPosition_world, baseCornerRotation_world,
-                                                      cornerRoot, cornerElementWidth, true,
-                                                      false, _settings.nominalFacadeWidth);
+                PrefabInstantiator.InstantiateSegment(
+                    _buildingStyle.defaultChimneyCapPrefabs, capPosition_world, baseCornerRotation_world,
+                    cornerRoot, cornerElementWidth, true,
+                    false, _settings.nominalFacadeWidth);
             }
         }
     }
@@ -106,35 +118,35 @@ public class CornerGenerator
     private void CalculateCornerTransform(Vector3 p1_prev_local, Vector3 p2_current_local, Vector3 p3_next_local,
                                           out Vector3 cornerPos_local, out Quaternion cornerRot_local)
     {
-        // Normals of the sides meeting at the current vertex
         Vector3 sideNormalPrev = PolygonGeometry.CalculateSideNormal(p1_prev_local, p2_current_local, _vertexData);
         Vector3 sideNormalNext = PolygonGeometry.CalculateSideNormal(p2_current_local, p3_next_local, _vertexData);
-
-        // Bisector of the angle between the two normals (points outward from the corner)
         Vector3 cornerFacingDirection = (sideNormalPrev + sideNormalNext).normalized;
 
-        // Handle collinear cases (straight wall) where normals might cancel out or be identical
         if (cornerFacingDirection.sqrMagnitude < GeometryUtils.Epsilon * GeometryUtils.Epsilon)
         {
-            cornerFacingDirection = sideNormalNext;
-            if (cornerFacingDirection.sqrMagnitude < GeometryUtils.Epsilon * GeometryUtils.Epsilon) // Still zero?
+            if (sideNormalNext.sqrMagnitude > GeometryUtils.Epsilon * GeometryUtils.Epsilon)
+                cornerFacingDirection = sideNormalNext;
+            else if (sideNormalPrev.sqrMagnitude > GeometryUtils.Epsilon * GeometryUtils.Epsilon)
+                cornerFacingDirection = sideNormalPrev;
+            else
             {
-                // Fallback if sideNormalNext was also zero (e.g. p2_current == p3_next)
-                // Use normal perpendicular to the incoming segment
                 Vector3 dirIn = (p2_current_local - p1_prev_local).normalized;
-                cornerFacingDirection = new Vector3(dirIn.z, 0, -dirIn.x); // Perpendicular
-                if (cornerFacingDirection.sqrMagnitude < GeometryUtils.Epsilon * GeometryUtils.Epsilon)
+                if (dirIn.sqrMagnitude > GeometryUtils.Epsilon * GeometryUtils.Epsilon)
+                    cornerFacingDirection = new Vector3(dirIn.z, 0, -dirIn.x).normalized;
+                else
                 {
-                    cornerFacingDirection = Vector3.forward; // Absolute fallback
+                    Vector3 dirOut = (p3_next_local - p2_current_local).normalized;
+                    if (dirOut.sqrMagnitude > GeometryUtils.Epsilon * GeometryUtils.Epsilon)
+                        cornerFacingDirection = new Vector3(dirOut.z, 0, -dirOut.x).normalized;
+                    else
+                        cornerFacingDirection = Vector3.forward;
                 }
             }
         }
 
         cornerRot_local = Quaternion.LookRotation(cornerFacingDirection);
-
-        // Apply forward offset along the corner's facing direction
-        Vector3 localOffset = Vector3.forward * _settings.cornerElementForwardOffset; // Z-forward in corner's local space
-        Vector3 worldSpaceOffsetFromCornerPoint = cornerRot_local * localOffset;
-        cornerPos_local = p2_current_local + worldSpaceOffsetFromCornerPoint;
+        Vector3 localOffsetVector = Vector3.forward * _settings.cornerElementForwardOffset;
+        Vector3 buildingLocalSpaceOffset = cornerRot_local * localOffsetVector;
+        cornerPos_local = p2_current_local + buildingLocalSpaceOffset;
     }
 }

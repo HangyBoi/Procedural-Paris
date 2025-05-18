@@ -316,7 +316,7 @@ public class PolygonBuildingGeneratorMainEditor : Editor
         Vector3 angleLabelOffset = angleLabelOffsetDir_world.normalized * 0.4f * HandleUtility.GetHandleSize(p_curr_world);
 
         Handles.color = Color.white;
-        Handles.Label(p_curr_world + angleLabelOffset, $"{angle:F1}°");
+        Handles.Label(p_curr_world + angleLabelOffset, $"{angle:F1}Â°");
     }
 
     private bool DrawHeightAdjustmentHandle(Vector3[] worldPolygonBaseVertices)

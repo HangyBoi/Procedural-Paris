@@ -8,6 +8,8 @@ public class RoofWindowGenerator
     private readonly List<PolygonSideData> _sideData;
     private readonly BuildingStyleSO _buildingStyle;
 
+    private const float ACUTE_ANGLE_THRESHOLD_DEGREES = 90.0f;
+
     public RoofWindowGenerator(PolygonBuildingGeneratorMain settings, List<PolygonVertexData> vertexData, List<PolygonSideData> sideData, BuildingStyleSO buildingStyle)
     {
         _settings = settings;
@@ -19,25 +21,61 @@ public class RoofWindowGenerator
     public void GenerateAllWindows(Transform roofWindowsRoot, GeneratedRoofObjects generatedRoofs)
     {
         if (!_settings.placeMansardWindows && !_settings.placeAtticWindows) return;
+        if (_vertexData.Count < 3) return;
 
+        // --- Mansard Window Setup ---
         GameObject mansardWindowsParent = null;
-        if (_settings.placeMansardWindows && generatedRoofs.MansardRoofObject != null)
+        bool canGenerateMansardWindows = _settings.placeMansardWindows &&
+                                         _settings.useMansardFloor &&
+                                         generatedRoofs.MansardRoofObject != null &&
+                                         _settings.mansardRiseHeight >= _settings.minMansardRiseForWindows &&
+                                         _settings.mansardSlopeHorizontalDistance <= _settings.maxMansardHDistForWindows;
+
+        if (canGenerateMansardWindows)
         {
             mansardWindowsParent = new GameObject("Mansard Windows");
             mansardWindowsParent.transform.SetParent(roofWindowsRoot, false);
         }
+        else if (_settings.placeMansardWindows && _settings.useMansardFloor) // Log if general conditions met but thresholds failed
+        {
+            if (generatedRoofs.MansardRoofObject == null)
+                Debug.LogWarning("RoofWindowGenerator: Mansard windows enabled, but Mansard Roof Object is null.");
+            else if (_settings.mansardRiseHeight < _settings.minMansardRiseForWindows)
+                Debug.Log($"RoofWindowGenerator: Mansard windows skipped. Mansard Rise Height ({_settings.mansardRiseHeight}) is less than MinRiseForWindows ({_settings.minMansardRiseForWindows}).");
+            else if (_settings.mansardSlopeHorizontalDistance < _settings.maxMansardHDistForWindows)
+                Debug.Log($"RoofWindowGenerator: Mansard windows skipped. Mansard Slope Horizontal Distance ({_settings.mansardSlopeHorizontalDistance}) is less than MinHDistForWindows ({_settings.maxMansardHDistForWindows}).");
+        }
 
+        // --- Attic Window Setup ---
         GameObject atticWindowsParent = null;
-        if (_settings.placeAtticWindows && generatedRoofs.AtticRoofObject != null)
+        bool canGenerateAtticWindows = _settings.placeAtticWindows &&
+                                       _settings.useAtticFloor &&
+                                       generatedRoofs.AtticRoofObject != null &&
+                                       _settings.atticRiseHeight >= _settings.minAtticRiseForWindows &&
+                                       _settings.atticSlopeHorizontalDistance <= _settings.maxAtticHDistForWindows;
+
+        if (canGenerateAtticWindows)
         {
             atticWindowsParent = new GameObject("Attic Windows");
             atticWindowsParent.transform.SetParent(roofWindowsRoot, false);
         }
+        else if (_settings.placeAtticWindows && _settings.useAtticFloor) // Log if general conditions met but thresholds failed
+        {
+            if (generatedRoofs.AtticRoofObject == null)
+                Debug.LogWarning("RoofWindowGenerator: Attic windows enabled, but Attic Roof Object is null.");
+            else if (_settings.atticRiseHeight < _settings.minAtticRiseForWindows)
+                Debug.Log($"RoofWindowGenerator: Attic windows skipped. Attic Rise Height ({_settings.atticRiseHeight}) is less than MinRiseForWindows ({_settings.minAtticRiseForWindows}).");
+            else if (_settings.atticSlopeHorizontalDistance < _settings.maxAtticHDistForWindows)
+                Debug.Log($"RoofWindowGenerator: Attic windows skipped. Attic Slope Horizontal Distance ({_settings.atticSlopeHorizontalDistance}) is less than MinHDistForWindows ({_settings.maxAtticHDistForWindows}).");
+        }
 
-        for (int sideIdx = 0; sideIdx < _vertexData.Count; sideIdx++)
+
+        int N = _vertexData.Count;
+
+        for (int sideIdx = 0; sideIdx < N; sideIdx++)
         {
             Vector3 p1_local = _vertexData[sideIdx].position;
-            Vector3 p2_local = _vertexData[(sideIdx + 1) % _vertexData.Count].position;
+            Vector3 p2_local = _vertexData[(sideIdx + 1) % N].position;
             float sideDistance = Vector3.Distance(p1_local, p2_local);
 
             if (sideDistance < GeometryUtils.Epsilon) continue;
@@ -45,25 +83,79 @@ public class RoofWindowGenerator
             int numSegments = CalculateNumSegments(sideDistance);
             float actualSegmentWidth = CalculateActualSegmentWidth(sideDistance, numSegments);
 
+            bool skipFirstSegment = _vertexData[sideIdx].addCornerElement; // Basic check
+            if (skipFirstSegment && numSegments > 1) // Only check angle if it's a multi-segment side and has a corner element
+            {
+                int prevVertexIndex = (sideIdx + N - 1) % N;
+                Vector3 p_prev = _vertexData[prevVertexIndex].position; // Vertex before the start of current side
+                Vector3 p_curr = p1_local;             // Start vertex of current side
+                Vector3 p_next = p2_local;             // End vertex of current side
+
+                Vector3 dir1 = (p_curr - p_prev).normalized;
+                Vector3 dir2 = (p_next - p_curr).normalized; // This is the current side's direction
+
+                // We need the outgoing vector from p_curr to p_next (current side)
+                // and the incoming vector from p_prev to p_curr
+                // Angle between -dir1 and dir2 (vector from prev to curr, and curr to next)
+                float angleAtCorner = Vector3.Angle(-dir1, dir2);
+
+                if (angleAtCorner < ACUTE_ANGLE_THRESHOLD_DEGREES)
+                {
+                    skipFirstSegment = true; // Confirmed skip due to acute angle
+                }
+                // else, if angle is >= 90, the _vertexData[sideIdx].addCornerElement still applies
+            }
+
+
+            // Check angle at the end vertex of the current side (vertexData[(sideIdx + 1) % N])
+            int endVertexIndexOfSide = (sideIdx + 1) % N;
+            bool skipLastSegment = _vertexData[endVertexIndexOfSide].addCornerElement; // Basic check
+            if (skipLastSegment && numSegments > 1) // Only check angle if it's a multi-segment side and has a corner element
+            {
+                Vector3 p_prev = p1_local;                // Start vertex of current side
+                Vector3 p_curr = p2_local;                // End vertex of current side
+                Vector3 p_next = _vertexData[(endVertexIndexOfSide + 1) % N].position; // Vertex after the end of current side
+
+                Vector3 dir1 = (p_curr - p_prev).normalized; // This is the current side's direction
+                Vector3 dir2 = (p_next - p_curr).normalized;
+
+                // Angle between -dir1 (vector from prev to curr) and dir2 (vector from curr to next)
+                float angleAtCorner = Vector3.Angle(-dir1, dir2);
+
+                if (angleAtCorner < ACUTE_ANGLE_THRESHOLD_DEGREES)
+                {
+                    skipLastSegment = true; // Confirmed skip due to acute angle
+                }
+                // else, if angle is >= 90, the _vertexData[endVertexIndexOfSide].addCornerElement still applies
+            }
+            // --- END OF MODIFIED CORNER SKIPPING LOGIC ---
+
             for (int segmentIdx = 0; segmentIdx < numSegments; segmentIdx++)
             {
-                if (_settings.placeMansardWindows && _settings.useMansardFloor && mansardWindowsParent != null && generatedRoofs.MansardRoofObject != null)
+                if (skipFirstSegment && segmentIdx == 0) continue;
+                if (skipLastSegment && segmentIdx == numSegments - 1) continue;
+
+                if (canGenerateMansardWindows) // Use the pre-calculated boolean
                 {
                     PlaceWindowsOnSpecificRoof(
                         "Mansard",
                         generatedRoofs.MansardRoofObject,
                         sideIdx, segmentIdx, numSegments, actualSegmentWidth,
-                        mansardWindowsParent.transform
+                        mansardWindowsParent.transform,
+                        _settings.mansardSlopeHorizontalDistance,
+                        _settings.mansardWindowInset
                     );
                 }
 
-                if (_settings.placeAtticWindows && _settings.useAtticFloor && atticWindowsParent != null && generatedRoofs.AtticRoofObject != null)
+                if (canGenerateAtticWindows) // Use the pre-calculated boolean
                 {
                     PlaceWindowsOnSpecificRoof(
                         "Attic",
                         generatedRoofs.AtticRoofObject,
                         sideIdx, segmentIdx, numSegments, actualSegmentWidth,
-                        atticWindowsParent.transform
+                        atticWindowsParent.transform,
+                        _settings.atticSlopeHorizontalDistance,
+                        _settings.atticWindowInset
                     );
                 }
             }
@@ -94,139 +186,82 @@ public class RoofWindowGenerator
         int segmentIndexInSide,
         int totalSegmentsOnSide,
         float actualSegmentWidth,
-        Transform windowsParent)
+        Transform windowsParent,
+        float roofSlopeHorizontalDistance,
+        float currentRoofWindowInset)
     {
-        MeshFilter targetRoofMF = roofObject.GetComponent<MeshFilter>();
-        if (targetRoofMF == null || targetRoofMF.sharedMesh == null)
+        // MeshFilter and MeshCollider checks already in place from previous version
+        MeshCollider roofCollider = roofObject.GetComponent<MeshCollider>();
+        if (roofCollider == null)
         {
-            Debug.LogError($"{roofTypeName} GameObject for side {sideIndex} does not have a MeshFilter or mesh.");
+            Debug.LogError($"{roofTypeName} GameObject for side {sideIndex} does not have a MeshCollider. Cannot place windows via raycast.");
             return;
         }
-        Mesh targetRoofMesh = targetRoofMF.sharedMesh;
-        Transform targetRoofTransform = roofObject.transform;
 
-        List<GameObject> defaultWindowPrefabs = null;
-        if (roofTypeName == "Mansard") defaultWindowPrefabs = _buildingStyle.defaultMansardWindowPrefabs;
-        else if (roofTypeName == "Attic") defaultWindowPrefabs = _buildingStyle.defaultAtticWindowPrefabs;
+        List<GameObject> windowPrefabsToUse = null;
+        if (roofTypeName == "Mansard") windowPrefabsToUse = _buildingStyle.defaultMansardWindowPrefabs;
+        else if (roofTypeName == "Attic") windowPrefabsToUse = _buildingStyle.defaultAtticWindowPrefabs;
 
-        List<GameObject> windowPrefabsToUse = defaultWindowPrefabs;
         if (sideIndex < _sideData.Count && _sideData[sideIndex].useCustomStyle && _sideData[sideIndex].sideStylePreset != null)
         {
             SideStyleSO customStyle = _sideData[sideIndex].sideStylePreset;
             List<GameObject> customPrefabs = null;
-            if (roofTypeName == "Mansard") customPrefabs = customStyle.mansardFloorPrefabs;
-            else if (roofTypeName == "Attic") customPrefabs = customStyle.atticFloorPrefabs;
+            if (roofTypeName == "Mansard" && customStyle.mansardFloorPrefabs != null && customStyle.mansardFloorPrefabs.Count > 0)
+                customPrefabs = customStyle.mansardFloorPrefabs;
+            else if (roofTypeName == "Attic" && customStyle.atticFloorPrefabs != null && customStyle.atticFloorPrefabs.Count > 0)
+                customPrefabs = customStyle.atticFloorPrefabs;
 
-            if (customPrefabs != null && customPrefabs.Count > 0) windowPrefabsToUse = customPrefabs;
+            if (customPrefabs != null) windowPrefabsToUse = customPrefabs;
         }
 
         if (windowPrefabsToUse == null || windowPrefabsToUse.Count == 0) return;
 
+
         int N = _vertexData.Count;
-        if (targetRoofMesh.vertexCount != N * 2)
+        Vector3 p1_base_local = _vertexData[sideIndex].position;
+        Vector3 p2_base_local = _vertexData[(sideIndex + 1) % N].position;
+
+        Vector3 sideVector_local = p2_base_local - p1_base_local;
+        Vector3 sideDirection_local = sideVector_local.normalized;
+        Vector3 facadeNormal_local = PolygonGeometry.CalculateSideNormal(p1_base_local, p2_base_local, _vertexData);
+
+        Vector3 segmentOuterEdgeHorizontalCenter_local = p1_base_local + sideDirection_local * (actualSegmentWidth * (segmentIndexInSide + 0.5f));
+        float desiredInwardHorizontalShift = roofSlopeHorizontalDistance * 0.5f;
+        Vector3 windowRaycastOriginHorizontal_local = segmentOuterEdgeHorizontalCenter_local - facadeNormal_local * desiredInwardHorizontalShift;
+        Vector3 horizontalPositionForRaycast_world = _settings.transform.TransformPoint(windowRaycastOriginHorizontal_local);
+
+        float buildingBaseY_world = _settings.transform.position.y;
+        float totalWallHeight_local = (_settings.middleFloors + 1) * _settings.floorHeight;
+        float estimatedMaxRoofRise_local = 0;
+        if (_settings.useMansardFloor) estimatedMaxRoofRise_local += _settings.mansardRiseHeight;
+        if (_settings.useAtticFloor) estimatedMaxRoofRise_local += _settings.atticRiseHeight;
+        float raycastOriginY_world = buildingBaseY_world + totalWallHeight_local + estimatedMaxRoofRise_local;
+
+        Vector3 raycastOrigin_world = new Vector3(
+            horizontalPositionForRaycast_world.x,
+            raycastOriginY_world,
+            horizontalPositionForRaycast_world.z
+        );
+
+        Ray ray = new Ray(raycastOrigin_world, Vector3.down);
+        RaycastHit hit;
+        float raycastDistance = raycastOriginY_world - (buildingBaseY_world - 1f);
+
+        if (!roofCollider.Raycast(ray, out hit, raycastDistance))
         {
-            Debug.LogError($"{roofTypeName} mesh vertex count ({targetRoofMesh.vertexCount}) on side {sideIndex} is incorrect for strip structure (expected {N * 2}). Skipping window placement for this side/roof.");
             return;
         }
 
-        // Get the four corner vertices of the ENTIRE roof panel for the current side, in mesh-local space
-        Vector3 vOuter1_meshLocal = targetRoofMesh.vertices[sideIndex];
-        Vector3 vOuter2_meshLocal = targetRoofMesh.vertices[(sideIndex + 1) % N];
-        Vector3 vInner1_meshLocal = targetRoofMesh.vertices[sideIndex + N]; // Inner vertex corresponding to vOuter1
-        Vector3 vInner2_meshLocal = targetRoofMesh.vertices[((sideIndex + 1) % N) + N]; // Inner vertex corresponding to vOuter2
-
-        // Transform these corner vertices to world space
-        Vector3 vOuter1_world = targetRoofTransform.TransformPoint(vOuter1_meshLocal);
-        Vector3 vOuter2_world = targetRoofTransform.TransformPoint(vOuter2_meshLocal);
-        Vector3 vInner1_world = targetRoofTransform.TransformPoint(vInner1_meshLocal);
-        Vector3 vInner2_world = targetRoofTransform.TransformPoint(vInner2_meshLocal);
-
-
-        // Calculate the facade normal (outward direction of the base building wall for this side)
-        Vector3 p1_base_local = _vertexData[sideIndex].position;
-        Vector3 p2_base_local = _vertexData[(sideIndex + 1) % N].position;
-        Vector3 facadeNormal_local = PolygonGeometry.CalculateSideNormal(p1_base_local, p2_base_local, _vertexData);
+        Vector3 windowAnchorPos_world = hit.point;
+        Vector3 roofSurfaceNormal_world = hit.normal;
         Vector3 facadeNormal_world = _settings.transform.TransformDirection(facadeNormal_local);
 
-        // Calculate the tangent direction along the outer (bottom) edge of the roof side
-        Vector3 sideTangent_world_raw = vOuter2_world - vOuter1_world;
-        Vector3 sideTangent_world;
-        if (sideTangent_world_raw.sqrMagnitude < GeometryUtils.Epsilon * GeometryUtils.Epsilon)
-        {
-            // Fallback if outer edge has zero length (degenerate)
-            sideTangent_world = targetRoofTransform.right; // Assume roof object's right
-        }
-        else
-        {
-            sideTangent_world = sideTangent_world_raw.normalized;
-        }
+        // --- MODIFIED INSET LOGIC ---
+        // Inset along the facade's normal (window's Z-axis), effectively pushing it "horizontally" into the building.
+        // A positive roofWindowInset pushes the window inwards from its raycasted position.
+        Vector3 windowPosition_world = windowAnchorPos_world - facadeNormal_world * currentRoofWindowInset;
 
-        // Calculate a CONSISTENT slope direction for the ENTIRE roof side
-        // This vector points from the midpoint of the outer edge to the midpoint of the inner edge
-        Vector3 midOuterEdge_world = (vOuter1_world + vOuter2_world) * 0.5f;
-        Vector3 midInnerEdge_world = (vInner1_world + vInner2_world) * 0.5f;
-        Vector3 consistentSlopeDirection_world_raw = midInnerEdge_world - midOuterEdge_world;
-        Vector3 consistentSlopeDirection_world;
-
-        if (consistentSlopeDirection_world_raw.sqrMagnitude < GeometryUtils.Epsilon * GeometryUtils.Epsilon)
-        {
-            // Fallback if midpoints are coincident (e.g., roof side is flat or collapsed)
-            // Use the roof object's local up, transformed to world space.
-            consistentSlopeDirection_world = targetRoofTransform.up;
-        }
-        else
-        {
-            consistentSlopeDirection_world = consistentSlopeDirection_world_raw.normalized;
-        }
-
-        // Calculate a CONSISTENT surface normal for the ENTIRE roof side (for window inset)
-        Vector3 consistentActualRoofSurfaceNormal_world_raw = Vector3.Cross(sideTangent_world, consistentSlopeDirection_world);
-        Vector3 consistentActualRoofSurfaceNormal_world;
-        if (consistentActualRoofSurfaceNormal_world_raw.sqrMagnitude < GeometryUtils.Epsilon * GeometryUtils.Epsilon)
-        {
-            // Fallback if sideTangent and consistentSlopeDirection are parallel (e.g. vertical roof face, sideTangent is vertical)
-            // This indicates a degenerate roof panel. Default to roof object's up.
-            consistentActualRoofSurfaceNormal_world = targetRoofTransform.up;
-        }
-        else
-        {
-            consistentActualRoofSurfaceNormal_world = consistentActualRoofSurfaceNormal_world_raw.normalized;
-        }
-
-        // Ensure the normal generally points "outward and upward"
-        // A good reference is the average of the facade's outward normal and the roof's up direction
-        Vector3 referenceOutwardUp = (facadeNormal_world + targetRoofTransform.up).normalized;
-        if (referenceOutwardUp.sqrMagnitude > GeometryUtils.Epsilon && // Ensure reference is not zero
-            Vector3.Dot(consistentActualRoofSurfaceNormal_world, referenceOutwardUp) < 0.0f)
-        {
-            consistentActualRoofSurfaceNormal_world = -consistentActualRoofSurfaceNormal_world;
-        }
-
-
-        // --- Calculate window position ---
-        // Interpolate along the *edges of the entire roof side* to find the segment's specific outer/inner points
-        float t_segment = (segmentIndexInSide + 0.5f) / totalSegmentsOnSide;
-        Vector3 segmentOuterEdgeMidPt_world = Vector3.Lerp(vOuter1_world, vOuter2_world, t_segment);
-        Vector3 segmentInnerEdgeMidPt_world = Vector3.Lerp(vInner1_world, vInner2_world, t_segment);
-
-        // Anchor position is the midpoint of the segment's span on the roof surface
-        Vector3 windowAnchorPos_world = (segmentOuterEdgeMidPt_world + segmentInnerEdgeMidPt_world) * 0.5f;
-
-        // Final window position with inset using the consistent surface normal
-        Vector3 windowPosition_world = windowAnchorPos_world + consistentActualRoofSurfaceNormal_world * _settings.roofWindowInset;
-
-        // --- Calculate window rotation ---
-        Vector3 windowUpVector = consistentSlopeDirection_world;
-        // If facadeNormal and the chosen windowUpVector are parallel or anti-parallel,
-        // LookRotation needs a different 'up' hint to avoid ambiguity. Use roof's transform.up.
-        if (Vector3.Cross(facadeNormal_world, windowUpVector).sqrMagnitude < GeometryUtils.Epsilon * GeometryUtils.Epsilon)
-        {
-            windowUpVector = targetRoofTransform.up;
-        }
-        Quaternion windowRotation_world = Quaternion.LookRotation(facadeNormal_world, windowUpVector);
-
-        // --- END OF NEW/MODIFIED LOGIC ---
-
+        Quaternion windowRotation_world = Quaternion.LookRotation(facadeNormal_world, roofSurfaceNormal_world);
 
         GameObject prefab = windowPrefabsToUse[Random.Range(0, windowPrefabsToUse.Count)];
         if (prefab != null)
@@ -235,7 +270,7 @@ public class RoofWindowGenerator
             instance.transform.position = windowPosition_world;
             instance.transform.rotation = windowRotation_world;
 
-            if (_settings.scaleRoofWindowsToFitSegment && _settings.nominalFacadeWidth > GeometryUtils.Epsilon)
+            if (_settings.scaleRoofWindowsToFitSegment && _settings.nominalFacadeWidth > GeometryUtils.Epsilon && actualSegmentWidth > GeometryUtils.Epsilon)
             {
                 Vector3 localScale = instance.transform.localScale;
                 float scaleFactor = actualSegmentWidth / _settings.nominalFacadeWidth;

@@ -40,7 +40,6 @@ public static class GeometryUtils
 
     public static bool PointInTriangle(Vector3 pt, Vector3 v1, Vector3 v2, Vector3 v3)
     {
-        // ... (Implementation is likely correct, keep as is) ...
         float d1, d2, d3;
         bool has_neg, has_pos;
         d1 = CrossProduct2D(pt, v1, v2);
@@ -121,11 +120,10 @@ public static class GeometryUtils
 
             if (isEar)
             {
-                // --- THIS IS THE CORE FIX ---
                 // Add the triangle indices ensuring CCW order for Unity normals.
                 if (isClockwise)
                 {
-/*                  // Input was CW, so reverse order B, C to get CCW (A, C, B)
+/*                    // Input was CW, so reverse order B, C to get CCW (A, C, B)
                     triangles.Add(prevIndex);
                     triangles.Add(nextIndex); // C
                     triangles.Add(currIndex); // B*/
@@ -138,7 +136,7 @@ public static class GeometryUtils
                 }
                 else // Input was CCW
                 {
-/*                  // Input was CCW, so natural order (A, B, C) is already CCW
+/*                    // Input was CCW, so natural order (A, B, C) is already CCW
                     triangles.Add(prevIndex);
                     triangles.Add(currIndex); // B
                     triangles.Add(nextIndex); // C*/
@@ -147,7 +145,6 @@ public static class GeometryUtils
                     triangles.Add(nextIndex); // C
                     triangles.Add(currIndex); // B
                 }
-                // --- END CORE FIX ---
 
                 // Remove the middle vertex index of the clipped ear
                 indices.RemoveAt(currVIndex);
@@ -170,10 +167,9 @@ public static class GeometryUtils
         // Add the last remaining triangle (should always have 3 vertices left if valid)
         if (remainingVertices == 3)
         {
-            // --- APPLY CONSISTENT FIX HERE TOO ---
             if (isClockwise)
             {
-/*              // Input was CW, reverse order 1, 2 to get CCW (0, 2, 1)
+/*                // Input was CW, reverse order 1, 2 to get CCW (0, 2, 1)
                 triangles.Add(indices[0]);
                 triangles.Add(indices[2]); // 2
                 triangles.Add(indices[1]); // 1*/
@@ -195,7 +191,7 @@ public static class GeometryUtils
                 triangles.Add(indices[2]); // 2
                 triangles.Add(indices[1]); // 1
             }
-            // --- END CONSISTENT FIX ---
+
         }
         else if (loopSafetyCounter >= maxLoops)
         {
