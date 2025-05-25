@@ -198,7 +198,7 @@ public class PolygonBuildingGeneratorEditor : Editor
             }
         }
 
-        if (vertexCount >= 3 && _targetScript.floorHeight > GeometryUtils.Epsilon)
+        if (vertexCount >= 3 && _targetScript.floorHeight > GeometryConstants.GeometricEpsilon)
         {
             if (DrawHeightAdjustmentHandle(worldVertices)) changedByHandle = true;
         }
@@ -276,9 +276,9 @@ public class PolygonBuildingGeneratorEditor : Editor
         int p2_local_idx = (index + 1) % _targetScript.vertexData.Count;
         Vector3 p2_local = _targetScript.vertexData[p2_local_idx].position;
 
-        if ((p2_local - p1_local).sqrMagnitude > GeometryUtils.Epsilon * GeometryUtils.Epsilon)
+        if ((p2_local - p1_local).sqrMagnitude > GeometryConstants.GeometricEpsilon * GeometryConstants.GeometricEpsilon)
         {
-            Vector3 sideNormal_local = PolygonGeometry.CalculateSideNormal(p1_local, p2_local, _targetScript.vertexData);
+            Vector3 sideNormal_local = BuildingFootprintUtils.CalculateSideNormal(p1_local, p2_local, _targetScript.vertexData);
             Vector3 sideNormal_world = _targetTransform.TransformDirection(sideNormal_local);
 
             Handles.color = Color.green;
@@ -301,12 +301,12 @@ public class PolygonBuildingGeneratorEditor : Editor
         edge1_world.y = 0;
         edge2_world.y = 0;
 
-        if (edge1_world.sqrMagnitude < GeometryUtils.Epsilon || edge2_world.sqrMagnitude < GeometryUtils.Epsilon) return;
+        if (edge1_world.sqrMagnitude < GeometryConstants.GeometricEpsilon || edge2_world.sqrMagnitude < GeometryConstants.GeometricEpsilon) return;
 
         float angle = Vector3.Angle(edge1_world.normalized, edge2_world.normalized);
 
         Vector3 angleLabelOffsetDir_world = (edge1_world.normalized + edge2_world.normalized);
-        if (angleLabelOffsetDir_world.sqrMagnitude < GeometryUtils.Epsilon)
+        if (angleLabelOffsetDir_world.sqrMagnitude < GeometryConstants.GeometricEpsilon)
         {
             angleLabelOffsetDir_world = Quaternion.Euler(0, 90, 0) * edge1_world.normalized;
         }
@@ -319,7 +319,7 @@ public class PolygonBuildingGeneratorEditor : Editor
 
     private bool DrawHeightAdjustmentHandle(Vector3[] worldPolygonBaseVertices)
     {
-        if (worldPolygonBaseVertices.Length < 3 || _targetScript.floorHeight <= GeometryUtils.Epsilon) return false;
+        if (worldPolygonBaseVertices.Length < 3 || _targetScript.floorHeight <= GeometryConstants.GeometricEpsilon) return false;
         bool changed = false;
 
         Vector3 baseCenter_world = Vector3.zero;
