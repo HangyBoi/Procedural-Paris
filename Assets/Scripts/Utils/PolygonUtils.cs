@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using MIConvexHull;
+using System.Linq;
 
 /// <summary>
 /// Utility class for 2D polygon and geometric calculations, primarily using Vector2.
@@ -204,5 +205,67 @@ public static class PolygonUtils
             // For typical Voronoi cells (convex), this check for acute angles is primary.
         }
         return true; // All checks passed
+    }
+
+    /// <summary>
+    /// Snaps a 2D vector to the nearest point on a grid defined by snapSize.
+    /// </summary>
+    /// <param name="vertexPos">The Vector2 to snap.</param>
+    /// <param name="snapSize">The size of the grid cells. If 0 or less, no snapping occurs.</param>
+    /// <returns>The snapped Vector2.</returns>
+    public static Vector2 SnapVertexPosition2D(Vector2 vertexPos, float snapSize)
+    {
+        if (snapSize <= GeometryConstants.GeometricEpsilon) // Use a small epsilon to avoid division by zero or tiny snap sizes
+            return vertexPos;
+
+        return new Vector2(
+            Mathf.Round(vertexPos.x / snapSize) * snapSize,
+            Mathf.Round(vertexPos.y / snapSize) * snapSize
+        );
+    }
+
+    /// <summary>
+    /// Snaps all vertices of a 2D polygon to a grid.
+    /// Optionally removes duplicate consecutive vertices that might result from snapping.
+    /// </summary>
+    /// <param name="polygonVertices">The list of Vector2 vertices to snap.</param>
+    /// <param name="snapSize">The grid snap size.</param>
+    /// <param name="removeDuplicateConsecutive">If true, removes consecutive vertices that become identical after snapping.</param>
+    /// <returns>A new list of snapped vertices. Can be null or have <3 vertices if snapping causes degeneration.</returns>
+    public static List<Vector2> SnapPolygonVertices2D(List<Vector2> polygonVertices, float snapSize, bool removeDuplicateConsecutive = true)
+    {
+        if (polygonVertices == null || polygonVertices.Count == 0 || snapSize <= GeometryConstants.GeometricEpsilon)
+        {
+            return polygonVertices; // Return original if no snapping needed or invalid input
+        }
+
+        List<Vector2> snappedVertices = polygonVertices.Select(v => SnapVertexPosition2D(v, snapSize)).ToList();
+
+        if (removeDuplicateConsecutive && snappedVertices.Count > 1)
+        {
+            List<Vector2> uniqueSnappedVertices = new List<Vector2>();
+            uniqueSnappedVertices.Add(snappedVertices[0]);
+            for (int i = 1; i < snappedVertices.Count; i++)
+            {
+                if (Vector2.Distance(snappedVertices[i], uniqueSnappedVertices[uniqueSnappedVertices.Count - 1]) > GeometryConstants.GeometricEpsilon)
+                {
+                    uniqueSnappedVertices.Add(snappedVertices[i]);
+                }
+            }
+            // Check if the last and first vertex became the same and if removing the last one is safe
+            if (uniqueSnappedVertices.Count > 1 && Vector2.Distance(uniqueSnappedVertices[0], uniqueSnappedVertices[uniqueSnappedVertices.Count - 1]) < GeometryConstants.GeometricEpsilon)
+            {
+                if (uniqueSnappedVertices.Count > 3) // Only remove if it doesn't degenerate to a line/point
+                {
+                    uniqueSnappedVertices.RemoveAt(uniqueSnappedVertices.Count - 1);
+                }
+                // else: snapping made the polygon too small, might be <3 vertices after this.
+            }
+            snappedVertices = uniqueSnappedVertices;
+        }
+
+        // It's possible snapping degenerates the polygon (e.g., all points snap to a line or single point)
+        // The caller should re-validate the polygon (e.g., check for >= 3 vertices, area, etc.)
+        return snappedVertices;
     }
 }

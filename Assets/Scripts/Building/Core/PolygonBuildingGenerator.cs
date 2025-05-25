@@ -78,6 +78,17 @@ public class PolygonBuildingGenerator : MonoBehaviour
 
     public void GenerateBuilding()
     {
+/*        if (vertexData != null && vertexSnapSize > GeometryConstants.GeometricEpsilon)
+        {
+            for (int i = 0; i < vertexData.Count; i++)
+            {
+                // Create a new PolygonVertexData to avoid modifying struct in list directly if it causes issues
+                PolygonVertexData currentVD = vertexData[i];
+                currentVD.position = SnapVertexPosition(currentVD.position);
+                vertexData[i] = currentVD;
+            }
+        }*/
+
         ClearBuilding();
         SynchronizeSideData();
 

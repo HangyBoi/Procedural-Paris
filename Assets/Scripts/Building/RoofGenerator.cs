@@ -103,11 +103,6 @@ public class RoofGenerator
             return null;
         }
 
-        if (_vertexData.Count != outerLoop.Count)
-        {
-            Debug.LogError($"CalculateInnerRoofEdge: VertexData count ({_vertexData.Count}) mismatch with outerLoop count ({outerLoop.Count}). This implies an issue with how loops are passed or generated. The offsetting logic may be compromised.");
-        }
-
         List<Vector3> innerVertices = new List<Vector3>(outerLoop.Count);
         int n = outerLoop.Count;
 
