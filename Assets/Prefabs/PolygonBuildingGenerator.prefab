@@ -27,7 +27,7 @@ Transform:
   m_GameObject: {fileID: 5768368091491266180}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 73.78754, y: -197.03296, z: 85.46207}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -56,17 +56,17 @@ MonoBehaviour:
   buildingStyle: {fileID: 11400000, guid: f7dfce695fd53614ba457a693d1d2a9d, type: 2}
   vertexData:
   - position: {x: 20, y: 0, z: -40}
-    addCornerElement: 1
+    addCornerElement: 0
   - position: {x: 80, y: 0, z: 0}
-    addCornerElement: 1
+    addCornerElement: 0
   - position: {x: 200, y: 0, z: -60}
-    addCornerElement: 1
+    addCornerElement: 0
   - position: {x: 170, y: 0, z: -120}
-    addCornerElement: 1
+    addCornerElement: 0
   - position: {x: 100, y: 0, z: -130}
-    addCornerElement: 1
+    addCornerElement: 0
   - position: {x: 50, y: 0, z: -100}
-    addCornerElement: 1
+    addCornerElement: 0
   sideData:
   - useCustomStyle: 1
     sideStylePreset: {fileID: 11400000, guid: 70018644931183844bb3246c1e44a2fb, type: 2}
