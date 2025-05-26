@@ -10,4 +10,9 @@ public static class GeometryConstants
     /// and accumulation error is less of a concern (e.g., checking for exact collinearity in circumcenter).
     /// </summary>
     public const double HighPrecisionEpsilon = 1e-9;
+
+    /// <summary>
+    /// Squared epsilon, useful for avoiding square roots in distance comparisons.
+    /// </summary>
+    public const float GeometricEpsilonSqr = GeometricEpsilon * GeometricEpsilon;
 }

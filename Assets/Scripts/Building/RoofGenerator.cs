@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 // Removed: RoofDebugData struct
 
@@ -26,12 +27,14 @@ public class RoofGenerator
     /// <summary>
     /// Generates all roof layers and returns references to the created roof GameObjects.
     /// </summary>
-    public GeneratedRoofObjects GenerateMainRoof(Transform roofRoot) // Changed return type
+    public GeneratedRoofObjects GenerateMainRoof(Transform roofRoot, out bool success) // Changed return type
     {
+        success = true; // Assume success initially
         GeneratedRoofObjects generatedRoofs = new GeneratedRoofObjects();
         if (_vertexData.Count < 3)
         {
             Debug.LogWarning("RoofGenerator: Cannot generate roof, base polygon has less than 3 vertices.");
+            success = false;
             return generatedRoofs;
         }
 
@@ -42,6 +45,7 @@ public class RoofGenerator
             currentOuterEdgeLoop.Add(new Vector3(vd.position.x, wallTopHeight, vd.position.z));
         }
 
+        // --- Mansard Floor ---
         if (_settings.useMansardFloor && _settings.mansardSlopeHorizontalDistance > GeometryConstants.GeometricEpsilon)
         {
             List<Vector3> innerMansardEdgeLoop = CalculateInnerRoofEdge(currentOuterEdgeLoop, _settings.mansardSlopeHorizontalDistance, _settings.mansardRiseHeight);
@@ -55,6 +59,7 @@ public class RoofGenerator
             else Debug.LogWarning("RoofGenerator: Failed to calculate inner mansard edge loop.");
         }
 
+        // --- Attic Floor ---
         if (_settings.useAtticFloor && _settings.atticSlopeHorizontalDistance > GeometryConstants.GeometricEpsilon)
         {
             List<Vector3> innerAtticEdgeLoop = CalculateInnerRoofEdge(currentOuterEdgeLoop, _settings.atticSlopeHorizontalDistance, _settings.atticRiseHeight);
@@ -65,32 +70,86 @@ public class RoofGenerator
                 generatedRoofs.AtticRoofObject = CreateMeshObject(v, t, uv, mat, "AtticFloorMesh", ATTIC_FLOOR_NAME, roofRoot);
                 currentOuterEdgeLoop = innerAtticEdgeLoop;
             }
-            else Debug.LogWarning("RoofGenerator: Failed to calculate inner attic edge loop.");
+            else
+            {
+                Debug.LogWarning("RoofGenerator: Failed to calculate inner attic edge loop.");
+            }
         }
 
-        List<Vector3> flatRoofPerimeter;
+        // --- Flat Roof Cap ---
+        List<Vector3> flatRoofPerimeterInput = new List<Vector3>(currentOuterEdgeLoop); // Copy to modify for offset
         if (Mathf.Abs(_settings.flatRoofEdgeOffset) > GeometryConstants.GeometricEpsilon)
         {
-            flatRoofPerimeter = CalculateInnerRoofEdge(currentOuterEdgeLoop, -_settings.flatRoofEdgeOffset, 0f);
-            if (flatRoofPerimeter == null || flatRoofPerimeter.Count < 3)
+            List<Vector3> offsetPerimeter = CalculateInnerRoofEdge(currentOuterEdgeLoop, -_settings.flatRoofEdgeOffset, 0f);
+            if (offsetPerimeter != null && offsetPerimeter.Count >= 3)
             {
-                Debug.LogWarning("RoofGenerator: Flat roof offset calculation failed.");
-                flatRoofPerimeter = new List<Vector3>(currentOuterEdgeLoop);
+                flatRoofPerimeterInput = offsetPerimeter;
+            }
+            else
+            {
+                Debug.LogWarning("RoofGenerator: Flat roof offset calculation failed. Using non-offset perimeter.");
             }
         }
-        else flatRoofPerimeter = new List<Vector3>(currentOuterEdgeLoop);
 
-        if (flatRoofPerimeter.Count >= 3)
+        if (success && flatRoofPerimeterInput != null && flatRoofPerimeterInput.Count >= 3)
         {
-            if (GeometryUtils.TriangulatePolygonEarClipping(flatRoofPerimeter, out List<int> capTris))
+            List<Vector3> finalFlatRoofPerimeterForTriangulation = new List<Vector3>(flatRoofPerimeterInput);
+
+            List<Vector2> perimeter2D = finalFlatRoofPerimeterForTriangulation
+                .Select(v => new Vector2(v.x, v.z))
+                .ToList();
+
+            // Use a very small snap size for cleaning, primarily to merge coincident points.
+            List<Vector2> cleanedPerimeter2D = PolygonUtils.SnapPolygonVertices2D(perimeter2D, GeometryConstants.GeometricEpsilon, true);
+
+            if (cleanedPerimeter2D != null && cleanedPerimeter2D.Count >= 3)
             {
-                List<Vector2> capUVs = CalculatePlanarUVs(flatRoofPerimeter, _settings.roofUvScale);
-                // We could assign to generatedRoofs.FlatRoofObject here if needed
-                CreateMeshObject(flatRoofPerimeter, capTris, capUVs, _settings.roofMaterial, "FlatRoofCapMesh", ROOF_FLAT_NAME, roofRoot);
+                float commonY = 0;
+                // Reconstruct the 3D perimeter from the cleaned 2D one.
+                // Assumes all vertices in finalFlatRoofPerimeterForTriangulation had the same Y (which they should for the cap's base).
+                if (finalFlatRoofPerimeterForTriangulation.Count > 0)
+                {
+                    commonY = finalFlatRoofPerimeterForTriangulation[0].y;
+                }
+                else
+                {
+                    Debug.LogError("RoofGenerator: finalFlatRoofPerimeterForTriangulation is empty, cannot determine commonY for roof cap.");
+                    success = false;
+                    // return generatedRoofs; // Early exit if this critical error occurs
+                }
+
+                if (success) // Check success again in case the commonY safeguard failed
+                {
+                    finalFlatRoofPerimeterForTriangulation = cleanedPerimeter2D
+                        .Select(v2 => new Vector3(v2.x, commonY, v2.y)) // Corrected: v2.y for the Z part
+                        .ToList();
+
+                    if (GeometryUtils.TriangulatePolygonEarClipping(finalFlatRoofPerimeterForTriangulation, out List<int> capTris))
+                    {
+                        List<Vector2> capUVs = CalculatePlanarUVs(finalFlatRoofPerimeterForTriangulation, _settings.roofUvScale);
+                        GameObject flatRoofObj = CreateMeshObject(finalFlatRoofPerimeterForTriangulation, capTris, capUVs, _settings.roofMaterial, "FlatRoofCapMesh", ROOF_FLAT_NAME, roofRoot);
+
+                        generatedRoofs.FlatRoofObject = flatRoofObj;
+                    }
+                    else
+                    {
+                        Debug.LogError($"RoofGenerator: Flat Roof cap triangulation failed for '{ROOF_FLAT_NAME}' AFTER CLEANING. Polygon vertices: {string.Join("; ", finalFlatRoofPerimeterForTriangulation.Select(v => v.ToString("F4")))}");
+                        success = false;
+                    }
+                }
             }
-            else Debug.LogError("RoofGenerator: Flat Roof cap triangulation failed.");
+            else
+            {
+                Debug.LogWarning($"RoofGenerator: Flat roof perimeter for '{ROOF_FLAT_NAME}' became degenerate after cleaning. Original 3D count: {flatRoofPerimeterInput.Count}, Cleaned 2D count: {cleanedPerimeter2D?.Count ?? 0}. Skipping cap.");
+                success = false;
+            }
         }
-        else Debug.LogWarning("RoofGenerator: Cannot generate flat roof cap < 3 vertices.");
+        else if (success)
+        {
+            Debug.LogWarning($"RoofGenerator: Cannot generate flat roof cap for '{ROOF_FLAT_NAME}', initial perimeter < 3 vertices or null. Count: {flatRoofPerimeterInput?.Count ?? 0}");
+            if (flatRoofPerimeterInput != null && flatRoofPerimeterInput.Count > 0) Debug.LogWarning($"Perimeter vertices: {string.Join("; ", flatRoofPerimeterInput.Select(v => v.ToString("F4")))}");
+            success = false;
+        }
 
         return generatedRoofs;
     }

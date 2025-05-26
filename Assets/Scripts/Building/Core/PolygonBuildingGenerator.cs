@@ -76,7 +76,7 @@ public class PolygonBuildingGenerator : MonoBehaviour
     private RoofGenerator _roofGenerator;
     private RoofWindowGenerator _roofWindowManager;
 
-    public void GenerateBuilding()
+    public bool GenerateBuilding()
     {
 /*        if (vertexData != null && vertexSnapSize > GeometryConstants.GeometricEpsilon)
         {
@@ -95,12 +95,12 @@ public class PolygonBuildingGenerator : MonoBehaviour
         if (buildingStyle == null)
         {
             Debug.LogError("Cannot generate building: Building Style SO is not assigned.", this);
-            return;
+            return false;
         }
         if (vertexData.Count < 3)
         {
             Debug.LogWarning("Cannot generate building: Polygon requires at least 3 vertices.", this);
-            return;
+            return false;
         }
 
         _generatedBuildingRoot = new GameObject(ROOT_NAME);
@@ -124,11 +124,17 @@ public class PolygonBuildingGenerator : MonoBehaviour
         _facadeGenerator.GenerateAllFacades(facadesParent);
         _cornerGenerator.GenerateAllCorners(cornersParent);
 
-        GeneratedRoofObjects generatedRoofs = _roofGenerator.GenerateMainRoof(roofParent);
+        GeneratedRoofObjects generatedRoofs = _roofGenerator.GenerateMainRoof(roofParent, out bool roofSuccess);
+        if (!roofSuccess)
+        {
+            Debug.LogWarning($"Building '{gameObject.name}': Main roof generation failed (likely flat cap). Aborting and clearing this building.", this);
+            ClearBuilding(); // Clean up partially generated building
+            return false;
+        }
+
         _roofWindowManager.GenerateAllWindows(roofWindowsParent, generatedRoofs);
+        return true; // Building generation successful
     }
-
-
 
     public void ClearBuilding()
     {

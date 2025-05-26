@@ -5,7 +5,7 @@ using UnityEngine;
 /// </summary>
 public struct GeneratedRoofObjects
 {
-    public GameObject MansardRoofObject;
-    public GameObject AtticRoofObject;
-    // public GameObject FlatRoofObject;
+    public GameObject MansardRoofObject { get; set; }
+    public GameObject AtticRoofObject { get; set; }
+    public GameObject FlatRoofObject { get; set; }
 }
