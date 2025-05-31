@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b5f8cd14a5830ef48ac6191cd0a1e30e, type: 3}
+  m_Name: Empty Grey Side
+  m_EditorClassIdentifier: 
+  groundFloorPrefabs:
+  - {fileID: 3435898480930570988, guid: 26b6b37f1cd453f498ad414b0f3473d7, type: 3}
+  middleFloorPrefabs:
+  - {fileID: 3661715251601147587, guid: 97ca8fc681befc1489fb7548ac822c3b, type: 3}
+  mansardFloorPrefabs: []
+  atticFloorPrefabs: []

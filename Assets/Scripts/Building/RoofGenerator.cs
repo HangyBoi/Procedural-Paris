@@ -12,16 +12,18 @@ public class RoofGenerator
     private readonly PolygonBuildingGenerator _settings;
     private readonly List<PolygonVertexData> _vertexData;
     private readonly BuildingStyleSO _buildingStyle;
+    private readonly GeneratedBuildingElements _elementsStore;
 
     private const string ROOF_FLAT_NAME = "Procedural Flat Roof Cap";
     private const string MANSARD_FLOOR_NAME = "Procedural Mansard Floor";
     private const string ATTIC_FLOOR_NAME = "Procedural Attic Floor";
 
-    public RoofGenerator(PolygonBuildingGenerator settings, List<PolygonVertexData> vertexData, BuildingStyleSO buildingStyle)
+    public RoofGenerator(PolygonBuildingGenerator settings, List<PolygonVertexData> vertexData, BuildingStyleSO buildingStyle, GeneratedBuildingElements elementsStore)
     {
         _settings = settings;
         _vertexData = vertexData;
         _buildingStyle = buildingStyle;
+        _elementsStore = elementsStore;
     }
 
     /// <summary>
@@ -286,6 +288,10 @@ public class RoofGenerator
 
         GameObject meshObject = new GameObject(gameObjectName);
         meshObject.transform.SetParent(parent, false);
+
+        if (gameObjectName == MANSARD_FLOOR_NAME) _elementsStore.mansardRoofMeshObject = meshObject;
+        else if (gameObjectName == ATTIC_FLOOR_NAME) _elementsStore.atticRoofMeshObject = meshObject;
+        else if (gameObjectName == ROOF_FLAT_NAME) _elementsStore.flatRoofMeshObject = meshObject;
 
         MeshFilter mf = meshObject.AddComponent<MeshFilter>();
         mf.mesh = mesh;

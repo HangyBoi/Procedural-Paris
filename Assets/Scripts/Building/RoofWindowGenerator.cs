@@ -7,15 +7,17 @@ public class RoofWindowGenerator
     private readonly List<PolygonVertexData> _vertexData;
     private readonly List<PolygonSideData> _sideData;
     private readonly BuildingStyleSO _buildingStyle;
+    private readonly GeneratedBuildingElements _elementsStore;
 
     private const float ACUTE_ANGLE_THRESHOLD_DEGREES = 90.0f;
 
-    public RoofWindowGenerator(PolygonBuildingGenerator settings, List<PolygonVertexData> vertexData, List<PolygonSideData> sideData, BuildingStyleSO buildingStyle)
+    public RoofWindowGenerator(PolygonBuildingGenerator settings, List<PolygonVertexData> vertexData, List<PolygonSideData> sideData, BuildingStyleSO buildingStyle, GeneratedBuildingElements elementsStore)
     {
         _settings = settings;
         _vertexData = vertexData;
         _sideData = sideData;
         _buildingStyle = buildingStyle;
+        _elementsStore = elementsStore;
     }
 
     public void GenerateAllWindows(Transform roofWindowsRoot, GeneratedRoofObjects generatedRoofs)
@@ -269,6 +271,9 @@ public class RoofWindowGenerator
             GameObject instance = Object.Instantiate(prefab, windowsParent);
             instance.transform.position = windowPosition_world;
             instance.transform.rotation = windowRotation_world;
+
+            if (roofTypeName == "Mansard") _elementsStore.allMansardWindows.Add(instance);
+            else if (roofTypeName == "Attic") _elementsStore.allAtticWindows.Add(instance);
 
             if (_settings.scaleRoofWindowsToFitSegment && _settings.nominalFacadeWidth > GeometryConstants.GeometricEpsilon && actualSegmentWidth > GeometryConstants.GeometricEpsilon)
             {

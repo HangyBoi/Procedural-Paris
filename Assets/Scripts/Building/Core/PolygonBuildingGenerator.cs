@@ -70,11 +70,12 @@ public class PolygonBuildingGenerator : MonoBehaviour
     private const string ROOF_ROOT_NAME = "Roof Elements";
     private const string ROOF_WINDOWS_ROOT_NAME = "Roof Windows";
 
-
     private FacadeGenerator _facadeGenerator;
     private CornerGenerator _cornerGenerator;
     private RoofGenerator _roofGenerator;
     private RoofWindowGenerator _roofWindowManager;
+
+    private GeneratedBuildingElements _currentBuildingElements;
 
     public bool GenerateBuilding()
     {
@@ -90,6 +91,7 @@ public class PolygonBuildingGenerator : MonoBehaviour
         }*/
 
         ClearBuilding();
+        _currentBuildingElements = new GeneratedBuildingElements();
         SynchronizeSideData();
 
         if (buildingStyle == null)
@@ -105,11 +107,17 @@ public class PolygonBuildingGenerator : MonoBehaviour
 
         _generatedBuildingRoot = new GameObject(ROOT_NAME);
         _generatedBuildingRoot.transform.SetParent(this.transform, false);
+        _currentBuildingElements.buildingRoot = _generatedBuildingRoot;
 
-        _facadeGenerator = new FacadeGenerator(this, vertexData, sideData, buildingStyle);
-        _cornerGenerator = new CornerGenerator(this, vertexData, buildingStyle);
-        _roofGenerator = new RoofGenerator(this, vertexData, buildingStyle);
-        _roofWindowManager = new RoofWindowGenerator(this, vertexData, sideData, buildingStyle);
+        for (int i = 0; i < vertexData.Count; i++)
+        {
+            _currentBuildingElements.facadeElementsPerSide.Add(new SideElementGroup { sideIndex = i });
+        }
+
+        _facadeGenerator = new FacadeGenerator(this, vertexData, sideData, buildingStyle, _currentBuildingElements);
+        _cornerGenerator = new CornerGenerator(this, vertexData, buildingStyle, _currentBuildingElements);
+        _roofGenerator = new RoofGenerator(this, vertexData, buildingStyle, _currentBuildingElements);
+        _roofWindowManager = new RoofWindowGenerator(this, vertexData, sideData, buildingStyle, _currentBuildingElements);
 
         Transform facadesParent = new GameObject(FACADES_ROOT_NAME).transform;
         facadesParent.SetParent(_generatedBuildingRoot.transform, false);
@@ -133,7 +141,15 @@ public class PolygonBuildingGenerator : MonoBehaviour
         }
 
         _roofWindowManager.GenerateAllWindows(roofWindowsParent, generatedRoofs);
-        return true; // Building generation successful
+
+        // Add and configure the BuildingInstanceDataManager
+        BuildingInstanceDataManager dataManager = _generatedBuildingRoot.AddComponent<BuildingInstanceDataManager>();
+        dataManager.Initialize(this, _generatedBuildingRoot);
+        // Copy populated elements to the data manager
+        dataManager.elements = this._currentBuildingElements;
+
+
+        return true;
     }
 
     public void ClearBuilding()
@@ -148,6 +164,10 @@ public class PolygonBuildingGenerator : MonoBehaviour
             existingRoot = transform.Find(ROOT_NAME);
         }
         _generatedBuildingRoot = null;
+        if (_currentBuildingElements != null)
+        {
+            _currentBuildingElements.ClearReferences();
+        }
     }
 
     public void SynchronizeSideData()

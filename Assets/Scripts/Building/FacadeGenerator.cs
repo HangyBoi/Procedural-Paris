@@ -10,13 +10,15 @@ public class FacadeGenerator
     private readonly List<PolygonVertexData> _vertexData;
     private readonly List<PolygonSideData> _sideData;
     private readonly BuildingStyleSO _buildingStyle;
+    private readonly GeneratedBuildingElements _elementsStore;
 
-    public FacadeGenerator(PolygonBuildingGenerator settings, List<PolygonVertexData> vertexData, List<PolygonSideData> sideData, BuildingStyleSO buildingStyle)
+    public FacadeGenerator(PolygonBuildingGenerator settings, List<PolygonVertexData> vertexData, List<PolygonSideData> sideData, BuildingStyleSO buildingStyle, GeneratedBuildingElements elementsStore)
     {
         _settings = settings;
         _vertexData = vertexData;
         _sideData = sideData;
         _buildingStyle = buildingStyle;
+        _elementsStore = elementsStore;
     }
 
     /// <summary>
@@ -41,6 +43,9 @@ public class FacadeGenerator
 
             if (sideDistance < GeometryConstants.GeometricEpsilon) continue; // Skip zero-length sides
 
+            SideElementGroup currentSideGroup = _elementsStore.facadeElementsPerSide.Find(sg => sg.sideIndex == i);
+            if (currentSideGroup == null) { continue; }
+
             Vector3 sideDirection = sideVector.normalized;
             // Calculate normal using the polygon's winding order for consistent outward direction
             Vector3 sideNormal = BuildingFootprintUtils.CalculateSideNormal(p1_local, p2_local, _vertexData);
@@ -49,6 +54,7 @@ public class FacadeGenerator
             float actualSegmentWidth = CalculateActualSegmentWidth(sideDistance, numSegments);
 
             GetSidePrefabLists(i, out var currentGroundPrefabs, out var currentMiddlePrefabs);
+
 
             for (int j = 0; j < numSegments; j++)
             {
@@ -68,9 +74,11 @@ public class FacadeGenerator
                     Vector3 groundFloorPivotPosition_world = _settings.transform.TransformPoint(groundFloorPivotPosition_local);
                     Quaternion baseSegmentRotation_world = _settings.transform.rotation * baseSegmentRotation_local;
 
-                    PrefabInstantiator.InstantiateSegment(currentGroundPrefabs, groundFloorPivotPosition_world, baseSegmentRotation_world,
+                    GameObject groundInstance = PrefabInstantiator.InstantiateSegment(currentGroundPrefabs, groundFloorPivotPosition_world, baseSegmentRotation_world,
                                                           sideParent.transform, actualSegmentWidth, false,
                                                           _settings.scaleFacadesToFitSide, _settings.nominalFacadeWidth);
+
+                    if (groundInstance != null) currentSideGroup.groundFacadeSegments.Add(groundInstance);
                 }
                 currentBottomY += _settings.floorHeight;
 
@@ -86,9 +94,12 @@ public class FacadeGenerator
                         Vector3 middleFloorPivotPosition_world = _settings.transform.TransformPoint(middleFloorPivotPosition_local);
                         Quaternion baseSegmentRotation_world = _settings.transform.rotation * baseSegmentRotation_local;
 
-                        PrefabInstantiator.InstantiateSegment(currentMiddlePrefabs, middleFloorPivotPosition_world, baseSegmentRotation_world,
+                        GameObject middleInstance = PrefabInstantiator.InstantiateSegment(currentMiddlePrefabs, middleFloorPivotPosition_world, baseSegmentRotation_world,
                                                               sideParent.transform, actualSegmentWidth, false,
                                                               _settings.scaleFacadesToFitSide, _settings.nominalFacadeWidth);
+
+                        if (middleInstance != null) currentSideGroup.middleFacadeSegments.Add(middleInstance);
+
                         currentBottomY += _settings.floorHeight;
                     }
                 }

@@ -9,12 +9,14 @@ public class CornerGenerator
     private readonly PolygonBuildingGenerator _settings;
     private readonly List<PolygonVertexData> _vertexData;
     private readonly BuildingStyleSO _buildingStyle;
+    private readonly GeneratedBuildingElements _elementsStore;
 
-    public CornerGenerator(PolygonBuildingGenerator settings, List<PolygonVertexData> vertexData, BuildingStyleSO buildingStyle)
+    public CornerGenerator(PolygonBuildingGenerator settings, List<PolygonVertexData> vertexData, BuildingStyleSO buildingStyle, GeneratedBuildingElements elementsStore)
     {
         _settings = settings;
         _vertexData = vertexData;
         _buildingStyle = buildingStyle;
+        _elementsStore = elementsStore;
     }
 
     /// <summary>
@@ -74,10 +76,12 @@ public class CornerGenerator
                     Vector3 segmentPivotPos_world = _settings.transform.TransformPoint(segmentPivotPos_local);
                     Quaternion baseCornerRotation_world = _settings.transform.rotation * baseCornerRotation_local;
 
-                    PrefabInstantiator.InstantiateSegment(
+                    GameObject bodyInstance = PrefabInstantiator.InstantiateSegment(
                         _buildingStyle.defaultChimneyBodyPrefabs, segmentPivotPos_world, baseCornerRotation_world,
                         cornerRoot, cornerElementWidth, true,
                         false, _settings.nominalFacadeWidth);
+
+                    if (bodyInstance != null) _elementsStore.allCornerBodies.Add(bodyInstance);
 
                     currentElementBaseY_local += chimneyBodyPrefabHeight; // Advance base for the next segment
                 }
@@ -103,10 +107,12 @@ public class CornerGenerator
                 Vector3 capPosition_world = _settings.transform.TransformPoint(capPosition_local);
                 Quaternion baseCornerRotation_world = _settings.transform.rotation * baseCornerRotation_local;
 
-                PrefabInstantiator.InstantiateSegment(
+                GameObject capInstance = PrefabInstantiator.InstantiateSegment(
                     _buildingStyle.defaultChimneyCapPrefabs, capPosition_world, baseCornerRotation_world,
                     cornerRoot, cornerElementWidth, true,
                     false, _settings.nominalFacadeWidth);
+
+                if (capInstance != null) _elementsStore.allCornerCaps.Add(capInstance);
             }
         }
     }
