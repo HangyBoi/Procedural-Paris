@@ -9,8 +9,6 @@ public class RoofWindowGenerator
     private readonly BuildingStyleSO _buildingStyle;
     private readonly GeneratedBuildingElements _elementsStore;
 
-    private const float ACUTE_ANGLE_THRESHOLD_DEGREES = 90.0f;
-
     public RoofWindowGenerator(PolygonBuildingGenerator settings, List<PolygonVertexData> vertexData, List<PolygonSideData> sideData, BuildingStyleSO buildingStyle, GeneratedBuildingElements elementsStore)
     {
         _settings = settings;
@@ -85,52 +83,14 @@ public class RoofWindowGenerator
             int numSegments = CalculateNumSegments(sideDistance);
             float actualSegmentWidth = CalculateActualSegmentWidth(sideDistance, numSegments);
 
-            bool skipFirstSegment = _vertexData[sideIdx].addCornerElement; // Basic check
-            if (skipFirstSegment && numSegments > 1) // Only check angle if it's a multi-segment side and has a corner element
+            bool skipFirstSegment = true; // Always skip the first segment
+            bool skipLastSegment = true;  // Always skip the last segment
+
+            if (numSegments <= 2) // Or <= 2 if you want at least one window even if ends are skipped
             {
-                int prevVertexIndex = (sideIdx + N - 1) % N;
-                Vector3 p_prev = _vertexData[prevVertexIndex].position; // Vertex before the start of current side
-                Vector3 p_curr = p1_local;             // Start vertex of current side
-                Vector3 p_next = p2_local;             // End vertex of current side
-
-                Vector3 dir1 = (p_curr - p_prev).normalized;
-                Vector3 dir2 = (p_next - p_curr).normalized; // This is the current side's direction
-
-                // We need the outgoing vector from p_curr to p_next (current side)
-                // and the incoming vector from p_prev to p_curr
-                // Angle between -dir1 and dir2 (vector from prev to curr, and curr to next)
-                float angleAtCorner = Vector3.Angle(-dir1, dir2);
-
-                if (angleAtCorner < ACUTE_ANGLE_THRESHOLD_DEGREES)
-                {
-                    skipFirstSegment = true; // Confirmed skip due to acute angle
-                }
-                // else, if angle is >= 90, the _vertexData[sideIdx].addCornerElement still applies
+                skipFirstSegment = false;
+                skipLastSegment = false;
             }
-
-
-            // Check angle at the end vertex of the current side (vertexData[(sideIdx + 1) % N])
-            int endVertexIndexOfSide = (sideIdx + 1) % N;
-            bool skipLastSegment = _vertexData[endVertexIndexOfSide].addCornerElement; // Basic check
-            if (skipLastSegment && numSegments > 1) // Only check angle if it's a multi-segment side and has a corner element
-            {
-                Vector3 p_prev = p1_local;                // Start vertex of current side
-                Vector3 p_curr = p2_local;                // End vertex of current side
-                Vector3 p_next = _vertexData[(endVertexIndexOfSide + 1) % N].position; // Vertex after the end of current side
-
-                Vector3 dir1 = (p_curr - p_prev).normalized; // This is the current side's direction
-                Vector3 dir2 = (p_next - p_curr).normalized;
-
-                // Angle between -dir1 (vector from prev to curr) and dir2 (vector from curr to next)
-                float angleAtCorner = Vector3.Angle(-dir1, dir2);
-
-                if (angleAtCorner < ACUTE_ANGLE_THRESHOLD_DEGREES)
-                {
-                    skipLastSegment = true; // Confirmed skip due to acute angle
-                }
-                // else, if angle is >= 90, the _vertexData[endVertexIndexOfSide].addCornerElement still applies
-            }
-            // --- END OF MODIFIED CORNER SKIPPING LOGIC ---
 
             for (int segmentIdx = 0; segmentIdx < numSegments; segmentIdx++)
             {

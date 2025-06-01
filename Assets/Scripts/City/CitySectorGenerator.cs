@@ -30,10 +30,21 @@ public class CitySectorGenerator : MonoBehaviour
     [Range(0f, 1f)]
     public float chanceForVariedSides = 0.1f;
     public List<SideStyleSO> availableSideStylesForVariation;
+    [Range(0f, 1f)]
+    public float chancePerVertexForCorner = 0.7f; // Chance for each vertex to have a corner element
 
-    [Header("Building Randomization")]
+    [Header("Building Structure Randomization")]
     public int minFloors = 2;
     public int maxFloors = 7;
+    [Range(0f, 1f)]
+    public float chanceForAtticFloor = 0.5f;
+
+    [Header("Building Roof Randomization Ranges")]
+    public Vector2 randomMansardHDistRange = new Vector2(1.0f, 2.5f);
+    public Vector2 randomMansardRiseRange = new Vector2(1.5f, 3.0f);
+    public Vector2 randomAtticHDistRange = new Vector2(1.0f, 2.0f);
+    public Vector2 randomAtticRiseRange = new Vector2(1.0f, 2.5f);
+
 
     [Header("Generator Output")]
     [SerializeField]
@@ -290,7 +301,28 @@ public class CitySectorGenerator : MonoBehaviour
         // 5. Randomize Floors
         buildingGenerator.middleFloors = Random.Range(minFloors, maxFloors + 1);
 
-        // 6. Apply Style Variation Logic
+        // 6. Randomize Corner Elements
+        if (footprintForBuildingStructure.Count > 0)
+        {
+            for (int vIdx = 0; vIdx < footprintForBuildingStructure.Count; vIdx++)
+            {
+                PolygonVertexData currentVertexData = footprintForBuildingStructure[vIdx]; // Get a copy of the struct
+                currentVertexData.addCornerElement = Random.value < chancePerVertexForCorner;
+                footprintForBuildingStructure[vIdx] = currentVertexData; // Assign the modified struct back
+            }
+        }
+
+        // 7. Randomize Attic Floor
+        buildingGenerator.useAtticFloor = Random.value < chanceForAtticFloor;
+
+        //8. Randomize roof parameters
+        buildingGenerator.mansardSlopeHorizontalDistance = Random.Range(randomMansardHDistRange.x, randomMansardHDistRange.y);
+        buildingGenerator.mansardRiseHeight = Random.Range(randomMansardRiseRange.x, randomMansardRiseRange.y);
+
+        buildingGenerator.atticSlopeHorizontalDistance = Random.Range(randomAtticHDistRange.x, randomAtticHDistRange.y);
+        buildingGenerator.atticRiseHeight = Random.Range(randomAtticRiseRange.x, randomAtticRiseRange.y);
+
+        // 9. Apply Style Variation Logic
         if (Random.value < chanceForVariedSides && availableSideStylesForVariation != null && availableSideStylesForVariation.Count > 0)
         {
             buildingGenerator.useConsistentStyleForAllSides = false;
@@ -312,10 +344,6 @@ public class CitySectorGenerator : MonoBehaviour
             buildingGenerator.useConsistentStyleForAllSides = true;
         }
 
-        // You can set other PolygonBuildingGenerator parameters here if desired:
-        // buildingGenerator.useMansardFloor = Random.value > 0.3f; 
-        // etc. Otherwise, they will use the values from the prefab.
-
         bool success = buildingGenerator.GenerateBuilding(); // Generates building parts AND pavement
 
         if (!success)
@@ -326,49 +354,6 @@ public class CitySectorGenerator : MonoBehaviour
         }
 
         return true;
-    }
-
-    // Placeholder Mesh for Debugging
-    void CreatePlaceholderMesh(GameObject parentGO, List<PolygonVertexData> footprint)
-    {
-        if (footprint.Count < 3) return;
-
-        MeshFilter mf = parentGO.GetComponent<MeshFilter>();
-        if (mf == null) mf = parentGO.AddComponent<MeshFilter>();
-        MeshRenderer mr = parentGO.GetComponent<MeshRenderer>();
-        if (mr == null) mr = parentGO.AddComponent<MeshRenderer>();
-
-        Mesh mesh = new Mesh();
-        mesh.name = "PlotPavementMesh";
-
-        Vector3[] vertices = footprint.Select(vd => vd.position).ToArray();
-
-        List<int> triangles;
-        if (GeometryUtils.TriangulatePolygonEarClipping(vertices.ToList(), out triangles)) // Convert to List for Triangulate
-        {
-            mesh.vertices = vertices;
-            mesh.triangles = triangles.ToArray();
-            mesh.RecalculateNormals(); // Normals should point up
-            mesh.RecalculateBounds();
-
-            mf.mesh = mesh;
-
-            if (pavementMaterial != null)
-            {
-                mr.sharedMaterial = pavementMaterial;
-            }
-            else
-            {
-                // Fallback if no material is assigned in inspector
-                Debug.LogWarning($"Pavement material not set on CitySectorGenerator. Using default pink for {parentGO.name}.");
-                if (mr.sharedMaterial == null)
-                    mr.sharedMaterial = new Material(Shader.Find("HDRP/Lit"));
-            }
-        }
-        else
-        {
-            Debug.LogError($"Failed to triangulate pavement for {parentGO.name}");
-        }
     }
 
     private void DestroySafely(GameObject obj)
@@ -456,5 +441,24 @@ public class CitySectorGenerator : MonoBehaviour
         minPlotSideLength = Mathf.Max(0.1f, minPlotSideLength);
         minPlotAngleDegrees = Mathf.Clamp(minPlotAngleDegrees, 1f, 179f);
         minPlotArea = Mathf.Max(0.1f, minPlotArea);
+
+        // Validate new randomization range fields
+        if (randomMansardHDistRange.y < randomMansardHDistRange.x) randomMansardHDistRange.y = randomMansardHDistRange.x;
+        randomMansardHDistRange.x = Mathf.Max(0f, randomMansardHDistRange.x);
+        randomMansardHDistRange.y = Mathf.Max(0f, randomMansardHDistRange.y);
+
+        if (randomMansardRiseRange.y < randomMansardRiseRange.x) randomMansardRiseRange.y = randomMansardRiseRange.x;
+        randomMansardRiseRange.x = Mathf.Max(0f, randomMansardRiseRange.x);
+        randomMansardRiseRange.y = Mathf.Max(0f, randomMansardRiseRange.y);
+
+        if (randomAtticHDistRange.y < randomAtticHDistRange.x) randomAtticHDistRange.y = randomAtticHDistRange.x;
+        randomAtticHDistRange.x = Mathf.Max(0f, randomAtticHDistRange.x);
+        randomAtticHDistRange.y = Mathf.Max(0f, randomAtticHDistRange.y);
+
+        if (randomAtticRiseRange.y < randomAtticRiseRange.x) randomAtticRiseRange.y = randomAtticRiseRange.x;
+        randomAtticRiseRange.x = Mathf.Max(0f, randomAtticRiseRange.x);
+        randomAtticRiseRange.y = Mathf.Max(0f, randomAtticRiseRange.y);
+
+        buildingInsetFromPavementEdge = Mathf.Max(0f, buildingInsetFromPavementEdge);
     }
 }
