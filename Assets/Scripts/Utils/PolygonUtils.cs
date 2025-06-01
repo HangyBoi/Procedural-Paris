@@ -83,17 +83,17 @@ public static class PolygonUtils
     /// <param name="polygon">The list of Vector2 vertices defining the polygon.</param>
     /// <param name="distance">The distance to shrink inwards. Must be positive.</param>
     /// <returns>A new list of shrunk vertices, or null if shrinking fails (e.g., distance too large, degenerate polygon).</returns>
-    public static List<Vector2> ShrinkPolygonBasic(List<Vector2> polygon, float distance)
+    public static List<Vector2> OffsetPolygonBasic(List<Vector2> polygon, float offsetDistance)
     {
         if (polygon == null || polygon.Count < 3) return null;
-        if (distance <= GeometryConstants.GeometricEpsilon) return new List<Vector2>(polygon); // No shrinking needed or negligible distance
+        if (Mathf.Abs(offsetDistance) <= GeometryConstants.GeometricEpsilon) return new List<Vector2>(polygon);
 
         // Calculate centroid (average of vertices)
         Vector2 centroid = Vector2.zero;
         foreach (var v in polygon) centroid += v;
         centroid /= polygon.Count;
 
-        List<Vector2> shrunkPolygon = new List<Vector2>();
+        List<Vector2> offsetPolygon = new List<Vector2>();
         for (int i = 0; i < polygon.Count; ++i)
         {
             Vector2 vertex = polygon[i];
@@ -109,20 +109,20 @@ public static class PolygonUtils
 
             float distanceToCentroid = directionToCentroid.magnitude;
 
-            // Check if the shrink distance is too large
-            if (distanceToCentroid < distance - GeometryConstants.GeometricEpsilon) // Allow slight negative if distanceToCentroid is almost equal to distance
+            // Check if the shrink distance is too large (would cause vertex to cross centroid)
+            if (offsetDistance > 0 && distanceToCentroid < offsetDistance - GeometryConstants.GeometricEpsilon)
             {
                 // Shrinking by this distance would cause the vertex to cross the centroid or invert.
                 return null;
             }
-            shrunkPolygon.Add(vertex + directionToCentroid.normalized * distance);
+            offsetPolygon.Add(vertex + directionToCentroid.normalized * offsetDistance);
         }
 
         // Check if shrunk polygon is still valid (e.g. not self-intersecting, still has area)
         // For basic shrink, just check vertex count.
-        if (shrunkPolygon.Count < 3) return null;
+        if (offsetPolygon.Count < 3) return null;
 
-        return shrunkPolygon;
+        return offsetPolygon;
     }
 
     /// <summary>

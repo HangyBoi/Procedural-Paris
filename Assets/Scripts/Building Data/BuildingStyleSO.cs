@@ -8,11 +8,6 @@ public class BuildingStyleSO : ScriptableObject
     [Header("Default Facade Prefabs")]
     public List<GameObject> defaultGroundFloorPrefabs;
     public List<GameObject> defaultMiddleFloorPrefabs;
-    public List<GameObject> defaultMansardFloorPrefabs;
-    public List<GameObject> defaultAtticFloorPrefabs;
-
-    [Header("Dedicated Mansard Corner Sets")]
-    public List<MansardCornerSet> mansardCornerSets = new List<MansardCornerSet>();
 
     [Header("Default Corner Elements (Chimneys)")]
     public List<GameObject> defaultChimneyBodyPrefabs;
@@ -21,4 +16,11 @@ public class BuildingStyleSO : ScriptableObject
     [Header("Default Roof Window Prefabs")]
     public List<GameObject> defaultMansardWindowPrefabs;
     public List<GameObject> defaultAtticWindowPrefabs;
+
+    [Header("Default Roof Prefabs (if applicable)")]
+    public List<GameObject> defaultMansardFloorPrefabs;
+    public List<GameObject> defaultAtticFloorPrefabs;
+
+    [Header("Dedicated Mansard Corner Sets (if applicable)")]
+    public List<MansardCornerSet> mansardCornerSets = new List<MansardCornerSet>();
 }

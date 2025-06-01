@@ -68,12 +68,12 @@ MonoBehaviour:
   - position: {x: 50, y: 0, z: -100}
     addCornerElement: 0
   sideData:
-  - useCustomStyle: 1
-    sideStylePreset: {fileID: 11400000, guid: 70018644931183844bb3246c1e44a2fb, type: 2}
-  - useCustomStyle: 1
-    sideStylePreset: {fileID: 11400000, guid: cced68d416bf40e4487bb75008c4e5eb, type: 2}
-  - useCustomStyle: 1
-    sideStylePreset: {fileID: 11400000, guid: a792ca25c32b7c44bae53a5b09d49086, type: 2}
+  - useCustomStyle: 0
+    sideStylePreset: {fileID: 0}
+  - useCustomStyle: 0
+    sideStylePreset: {fileID: 0}
+  - useCustomStyle: 0
+    sideStylePreset: {fileID: 0}
   - useCustomStyle: 0
     sideStylePreset: {fileID: 0}
   - useCustomStyle: 0

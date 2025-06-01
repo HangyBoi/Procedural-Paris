@@ -1,5 +1,6 @@
-using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
 
 [RequireComponent(typeof(MeshFilter))]
 public class PolygonBuildingGenerator : MonoBehaviour
@@ -15,11 +16,17 @@ public class PolygonBuildingGenerator : MonoBehaviour
         new() { position = new Vector3(5, 0, 5), addCornerElement = true },
         new() { position = new Vector3(5, 0, 0), addCornerElement = true }
     };
+
+    [Header("Style Application")]
+    public bool useConsistentStyleForAllSides = true;
     public List<PolygonSideData> sideData = new List<PolygonSideData>();
 
     [Header("Polygon Editing Settings")]
     public float vertexSnapSize = 10.0f;
     public int minSideLengthUnits = 1;
+
+    [Header("Pavement Settings")]
+    public float pavementOutset = 0.5f;
 
     [Header("Building Structure Settings")]
     public int middleFloors = 3;
@@ -63,8 +70,14 @@ public class PolygonBuildingGenerator : MonoBehaviour
     public float maxAtticHDistForWindows = 30.0f;
     public float minAtticRiseForWindows = 10.0f;
 
+    [HideInInspector]
+    public List<Vector2> originalPavementPlotVertices2D; // Set by CitySectorGenerator
+    public Material pavementMaterial;                    // Set by CitySectorGenerator
+    private PavementGenerator _pavementGeneratorInstance;
+    private const string PAVEMENT_GAMEOBJECT_NAME = "Pavement";
+
     private GameObject _generatedBuildingRoot;
-    private const string ROOT_NAME = "Generated Building";
+    private const string BUILDING_PARTS_ROOT_NAME = "Generated Building Parts";
     private const string FACADES_ROOT_NAME = "Facade Elements";
     private const string CORNERS_ROOT_NAME = "Corner Elements";
     private const string ROOF_ROOT_NAME = "Roof Elements";
@@ -105,9 +118,108 @@ public class PolygonBuildingGenerator : MonoBehaviour
             return false;
         }
 
-        _generatedBuildingRoot = new GameObject(ROOT_NAME);
+        Transform existingBuildingPartsRoot = transform.Find(BUILDING_PARTS_ROOT_NAME);
+        if (existingBuildingPartsRoot != null) DestroyImmediate(existingBuildingPartsRoot.gameObject);
+
+        _generatedBuildingRoot = new GameObject(BUILDING_PARTS_ROOT_NAME);
         _generatedBuildingRoot.transform.SetParent(this.transform, false);
         _currentBuildingElements.buildingRoot = _generatedBuildingRoot;
+
+        // --- SETUP AND GENERATE PAVEMENT ---
+        List<Vector2> pavementVerticesForGeneration = null;
+
+        // Try to derive pavement from the current building footprint (vertexData)
+        if (this.vertexData != null && this.vertexData.Count >= 3)
+        {
+            List<Vector2> currentBuildingFootprint2D = this.vertexData
+                .Select(vd => new Vector2(vd.position.x, vd.position.z))
+                .ToList();
+
+            // Ensure the footprint is valid before trying to outset/expand
+            // You might want to use a more lenient validation for intermediate steps
+            if (PolygonUtils.ValidatePlotGeometry(currentBuildingFootprint2D, 0.01f, 1f, 0.01f)) // Basic validation
+            {
+                // pavementOutset is how much larger the pavement should be.
+                // OffsetPolygonBasic: positive shrinks, negative expands.
+                // So, we pass -this.pavementOutset to expand.
+                float offsetValueForPavement = -this.pavementOutset;
+
+                if (Mathf.Abs(this.pavementOutset) > GeometryConstants.GeometricEpsilon) // Only offset if outset is significant
+                {
+                    pavementVerticesForGeneration = PolygonUtils.OffsetPolygonBasic(currentBuildingFootprint2D, offsetValueForPavement);
+
+                    if (pavementVerticesForGeneration == null || pavementVerticesForGeneration.Count < 3 ||
+                        !PolygonUtils.ValidatePlotGeometry(pavementVerticesForGeneration, 0.01f, 1f, 0.01f))
+                    {
+                        Debug.LogWarning($"Pavement offsetting by {offsetValueForPavement} for '{gameObject.name}' failed or resulted in an invalid polygon. Using building footprint directly for pavement as a fallback.", this);
+                        pavementVerticesForGeneration = new List<Vector2>(currentBuildingFootprint2D); // Fallback
+                    }
+                }
+                else
+                {
+                    // No outset defined, pavement matches the building footprint
+                    pavementVerticesForGeneration = new List<Vector2>(currentBuildingFootprint2D);
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"Current building footprint (vertexData) for '{gameObject.name}' is invalid. Cannot derive pavement from it at this stage.", this);
+            }
+        }
+
+        // If deriving from vertexData failed, fall back to originalPavementPlotVertices2D if available
+        if (pavementVerticesForGeneration == null || pavementVerticesForGeneration.Count < 3)
+        {
+            if (this.originalPavementPlotVertices2D != null && this.originalPavementPlotVertices2D.Count >= 3)
+            {
+                Debug.LogWarning($"Using 'originalPavementPlotVertices2D' for pavement for '{gameObject.name}' as derivation from current vertexData failed or was not applicable.", this);
+                pavementVerticesForGeneration = new List<Vector2>(this.originalPavementPlotVertices2D);
+            }
+            else
+            {
+                Debug.LogWarning($"No valid vertices could be determined for pavement generation for '{gameObject.name}'. No pavement will be generated.", this);
+            }
+        }
+
+        // Manage Pavement GameObject and PavementGenerator component
+        GameObject pavementGO = null;
+        // _pavementGeneratorInstance might be null if ClearBuilding destroyed it or it was never created
+
+        if (pavementVerticesForGeneration != null && pavementVerticesForGeneration.Count >= 3)
+        {
+            // Find or create the Pavement GameObject
+            Transform existingPavementGOTransform = transform.Find(PAVEMENT_GAMEOBJECT_NAME);
+            if (existingPavementGOTransform != null)
+            {
+                pavementGO = existingPavementGOTransform.gameObject;
+                _pavementGeneratorInstance = pavementGO.GetComponent<PavementGenerator>();
+                if (_pavementGeneratorInstance == null) // Should not happen if setup correctly
+                {
+                    Debug.LogWarning($"Pavement GameObject '{PAVEMENT_GAMEOBJECT_NAME}' existed but was missing PavementGenerator component. Recreating component on existing GO for '{gameObject.name}'.");
+                    _pavementGeneratorInstance = pavementGO.AddComponent<PavementGenerator>(); // Add if missing
+                }
+            }
+            else
+            {
+                pavementGO = new GameObject(PAVEMENT_GAMEOBJECT_NAME);
+                pavementGO.transform.SetParent(this.transform, false);
+                _pavementGeneratorInstance = pavementGO.AddComponent<PavementGenerator>();
+            }
+            _pavementGeneratorInstance.GeneratePavement(pavementVerticesForGeneration, this.pavementMaterial);
+        }
+        else
+        {
+            // No valid vertices for pavement, ensure any existing pavement object is cleared/hidden
+            Transform oldPavementTransform = transform.Find(PAVEMENT_GAMEOBJECT_NAME);
+            if (oldPavementTransform != null)
+            {
+                PavementGenerator oldPavementGen = oldPavementTransform.GetComponent<PavementGenerator>();
+                if (oldPavementGen != null) oldPavementGen.ClearPavement(); // Clears mesh and deactivates
+                else oldPavementTransform.gameObject.SetActive(false); // Deactivate if component missing
+            }
+            _pavementGeneratorInstance = null; // Ensure instance is null if no pavement
+        }
+        // --- END PAVEMENT ---
 
         for (int i = 0; i < vertexData.Count; i++)
         {
@@ -136,38 +248,55 @@ public class PolygonBuildingGenerator : MonoBehaviour
         if (!roofSuccess)
         {
             Debug.LogWarning($"Building '{gameObject.name}': Main roof generation failed (likely flat cap). Aborting and clearing this building.", this);
-            ClearBuilding(); // Clean up partially generated building
+            ClearBuildingPartsOnly();
             return false;
         }
 
         _roofWindowManager.GenerateAllWindows(roofWindowsParent, generatedRoofs);
 
-        // Add and configure the BuildingInstanceDataManager
+        // Add and configure the BuildingInstanceDataManager to the BUILDING PARTS ROOT
         BuildingInstanceDataManager dataManager = _generatedBuildingRoot.AddComponent<BuildingInstanceDataManager>();
         dataManager.Initialize(this, _generatedBuildingRoot);
-        // Copy populated elements to the data manager
         dataManager.elements = this._currentBuildingElements;
 
 
         return true;
     }
 
-    public void ClearBuilding()
+    private void ClearBuildingPartsOnly()
     {
-        Transform existingRoot = transform.Find(ROOT_NAME);
-        while (existingRoot != null)
+        // Clear actual building parts
+        Transform existingBuildingPartsRoot = transform.Find(BUILDING_PARTS_ROOT_NAME);
+        if (existingBuildingPartsRoot != null)
         {
             if (Application.isEditor && !Application.isPlaying)
-                DestroyImmediate(existingRoot.gameObject);
+                DestroyImmediate(existingBuildingPartsRoot.gameObject);
             else
-                Destroy(existingRoot.gameObject);
-            existingRoot = transform.Find(ROOT_NAME);
+                Destroy(existingBuildingPartsRoot.gameObject);
         }
         _generatedBuildingRoot = null;
+
         if (_currentBuildingElements != null)
         {
             _currentBuildingElements.ClearReferences();
         }
+    }
+
+    public void ClearBuilding() // This clears everything: building parts and pavement
+    {
+        ClearBuildingPartsOnly();
+
+        // Clear Pavement
+        // Find Pavement GO by name as _pavementGeneratorInstance might be stale after domain reloads
+        Transform pavementGOTransform = transform.Find(PAVEMENT_GAMEOBJECT_NAME);
+        if (pavementGOTransform != null)
+        {
+            if (Application.isEditor && !Application.isPlaying)
+                DestroyImmediate(pavementGOTransform.gameObject);
+            else
+                Destroy(pavementGOTransform.gameObject);
+        }
+        _pavementGeneratorInstance = null; // Nullify the reference
     }
 
     public void SynchronizeSideData()

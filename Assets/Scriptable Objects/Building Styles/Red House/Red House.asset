@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8ecb5da3d4386b84b977942dcf0e3c57, type: 3}
+  m_Name: Red House
+  m_EditorClassIdentifier: 
+  defaultGroundFloorPrefabs:
+  - {fileID: 5768072877802017965, guid: 19008e196509eca4e811823e83ce4b01, type: 3}
+  - {fileID: 5768072877802017965, guid: 1089870c926e9294fb6af2a9f3b3d610, type: 3}
+  - {fileID: 1146474107583270852, guid: a3b813ef390cc6e45970a060f46c3920, type: 3}
+  - {fileID: 4490539103680082300, guid: 3f980a34d3d0de543bf471338667a012, type: 3}
+  - {fileID: 3435898480930570988, guid: a680f912372233f40ba20364b2d0a188, type: 3}
+  defaultMiddleFloorPrefabs:
+  - {fileID: 3037907641868205952, guid: 748a769409a4d714e92fae0705b78850, type: 3}
+  - {fileID: 2037035238946278173, guid: ebca4da9fcefaa34abff93b753210504, type: 3}
+  defaultChimneyBodyPrefabs:
+  - {fileID: 3716927854529544225, guid: 297e9ae0173feed498e06d4fe8af2969, type: 3}
+  defaultChimneyCapPrefabs:
+  - {fileID: 5603749693001070441, guid: c0e1820a5d2f4574d8513a3302d6fb5b, type: 3}
+  defaultMansardWindowPrefabs:
+  - {fileID: 757365691267042281, guid: ba10f59d934614644b1d753a1dd719d7, type: 3}
+  defaultAtticWindowPrefabs:
+  - {fileID: 6023926734824447198, guid: 3fd23d9e5f228d54fac1963990d13991, type: 3}
+  defaultMansardFloorPrefabs:
+  - {fileID: 4794097862798657804, guid: a008a730605ad8540825dec5d28487ee, type: 3}
+  defaultAtticFloorPrefabs:
+  - {fileID: 2936507998635124413, guid: 979b7f3008fcff843bb5a78a6b225c0a, type: 3}
+  mansardCornerSets:
+  - targetCornerAngle: 90
+    angleTolerance: 5
+    cornerAssemblyPrefab: {fileID: 912778663916139423, guid: 440dff079265db640857efdc260f9af8,
+      type: 3}
+    coverageAlongNextSide: 5
+    coverageAlongPrevSide: 5
+  - targetCornerAngle: 225
+    angleTolerance: 5
+    cornerAssemblyPrefab: {fileID: 750656710070286286, guid: a822f1408cd84824d85118376ea05fef,
+      type: 3}
+    coverageAlongNextSide: 5
+    coverageAlongPrevSide: 5

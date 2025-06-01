@@ -32,6 +32,30 @@ public static class BuildingFootprintUtils
     }
 
     /// <summary>
+    /// Calculates the signed area of a polygon defined by a list of Vector3 points on the XZ plane.
+    /// A positive area indicates Counter-Clockwise (CCW) vertex order (when viewed from +Y),
+    /// a negative area indicates Clockwise (CW) order.
+    /// </summary>
+    /// <param name="vertices">List of Vector3 points defining the polygon on the XZ plane.</param>
+    /// <returns>The signed area of the polygon on the XZ plane.</returns>
+    public static float CalculateSignedAreaXZ(List<Vector3> vertices)
+    {
+        if (vertices == null || vertices.Count < 3) return 0f;
+
+        float area = 0f;
+        for (int i = 0; i < vertices.Count; i++)
+        {
+            Vector3 p1 = vertices[i];
+            Vector3 p2 = vertices[(i + 1) % vertices.Count];
+
+            // Shoelace formula component for XZ plane: (x1*z2 - x2*z1)
+            area += (p1.x * p2.z) - (p2.x * p1.z);
+        }
+        // The sum is twice the signed area.
+        return area / 2.0f;
+    }
+
+    /// <summary>
     /// Calculates the outward-facing normal for a side of a polygon on the XZ plane.
     /// The polygon is defined by PolygonVertexData. Winding order determines "outward".
     /// </summary>

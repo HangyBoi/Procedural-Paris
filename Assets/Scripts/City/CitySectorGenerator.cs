@@ -26,6 +26,11 @@ public class CitySectorGenerator : MonoBehaviour
     public Material pavementMaterial;
     public float buildingInsetFromPavementEdge = 0.5f;
 
+    [Header("Building Style Variation")]
+    [Range(0f, 1f)]
+    public float chanceForVariedSides = 0.1f;
+    public List<SideStyleSO> availableSideStylesForVariation;
+
     [Header("Building Randomization")]
     public int minFloors = 2;
     public int maxFloors = 7;
@@ -160,7 +165,7 @@ public class CitySectorGenerator : MonoBehaviour
                     }
                     // ---- END SNAPPING ----
 
-                    List<Vector2> pavementPlotVertices = PolygonUtils.ShrinkPolygonBasic(snappedClippedCell, streetWidth / 2.0f);
+                    List<Vector2> pavementPlotVertices = PolygonUtils.OffsetPolygonBasic(snappedClippedCell, streetWidth / 2.0f);
 
                     if (pavementPlotVertices != null && pavementPlotVertices.Count >= 3)
                     {
@@ -170,7 +175,7 @@ public class CitySectorGenerator : MonoBehaviour
                             List<Vector2> buildingFootprintVertices = null;
                             if (buildingInsetFromPavementEdge > GeometryConstants.GeometricEpsilon)
                             {
-                                buildingFootprintVertices = PolygonUtils.ShrinkPolygonBasic(pavementPlotVertices, buildingInsetFromPavementEdge);
+                                buildingFootprintVertices = PolygonUtils.OffsetPolygonBasic(pavementPlotVertices, buildingInsetFromPavementEdge);
                             }
                             else
                             {
@@ -188,20 +193,12 @@ public class CitySectorGenerator : MonoBehaviour
 
                                     _generatedData.ProcessedBuildingPlots.Add(new List<Vector2>(pavementPlotVertices));
 
-                                    // Create the placeholder mesh for pavement
-                                    List<PolygonVertexData> pavementFootprint = pavementPlotVertices
-                                           .Select(v2 => new PolygonVertexData { position = new Vector3(v2.x, 0, v2.y) })
-                                           .ToList();
-                                    GameObject pavementPlotGO = new GameObject($"PavementPlot_{_generatedData.ProcessedBuildingPlots.Count - 1}");
-                                    pavementPlotGO.transform.SetParent(sectorRoot, false);
-                                    CreatePlaceholderMesh(pavementPlotGO, pavementFootprint);   // Pavement created
-
                                     // Try to instantiate and generate the building
                                     bool buildingSuccess = InstantiateAndGenerateBuildingOnPlot(
-                                        buildingFootprintVertices,
+                                        buildingFootprintVertices,      // INSET footprint for the building structure
+                                        pavementPlotVertices,           // ORIGINAL (non-inset) plot for the pavement
                                         sectorRoot,
-                                        buildingsPlacedCount, // This is more like a potential index
-                                        pavementPlotGO // Pass pavement GO for potential deletion
+                                        buildingsPlacedCount
                                     );
 
                                     if (buildingSuccess)
@@ -227,65 +224,104 @@ public class CitySectorGenerator : MonoBehaviour
         Debug.Log($"City sector generation complete. Placed {buildingsPlacedCount} buildings out of {_generatedData.RawVoronoiCells.Count} raw Voronoi cells (from {_generatedData.SeedPoints.Count} seeds).", this);
     }
 
-    private bool InstantiateAndGenerateBuildingOnPlot(List<Vector2> plotVertices2D, Transform parentTransform, int plotIndex, GameObject associatedPavementGO)
+    private bool InstantiateAndGenerateBuildingOnPlot(
+        List<Vector2> buildingFootprintVertices2D,    // INSET footprint for the building structure
+        List<Vector2> originalPavementPlotVertices2D, // NON-INSET plot for the pavement
+        Transform sectorRoot,
+        int plotIndex)
     {
-        if (plotVertices2D == null || plotVertices2D.Count < 3)
+        if (buildingFootprintVertices2D == null || buildingFootprintVertices2D.Count < 3)
         {
-            Debug.LogWarning($"Plot {plotIndex}: Cannot generate building, plot has fewer than 3 vertices.");
-            DestroySafely(associatedPavementGO);
+            Debug.LogWarning($"Plot {plotIndex}: Cannot init building, building footprint has < 3 vertices.");
             return false;
         }
 
-        GameObject buildingGO = Instantiate(buildingGeneratorPrefab);
-        buildingGO.name = $"Building_{plotIndex}";
-        buildingGO.transform.SetParent(parentTransform, false);
+        // --- INSTANTIATE THE POLYGONBUILDINGGENERATOR PREFAB ---
+        // This GameObject will be the root for this "Building Complex" (structure + pavement)
+        GameObject buildingComplexGO = Instantiate(buildingGeneratorPrefab);
+        buildingComplexGO.name = $"BuildingComplex_{plotIndex}";
+        buildingComplexGO.transform.SetParent(sectorRoot, false);
 
-        if (!buildingGO.TryGetComponent<PolygonBuildingGenerator>(out var buildingGenerator))
+        if (!buildingComplexGO.TryGetComponent<PolygonBuildingGenerator>(out var buildingGenerator))
         {
-            Debug.LogError($"Plot {plotIndex}: Instantiated building prefab '{buildingGeneratorPrefab.name}' must have a PolygonBuildingGenerator component. Destroying instance and pavement.", buildingGO);
-            DestroySafely(buildingGO);
-            DestroySafely(associatedPavementGO);
+            Debug.LogError($"Plot {plotIndex}: Instantiated building prefab '{buildingGeneratorPrefab.name}' must have a PolygonBuildingGenerator. Destroying instance.", buildingComplexGO);
+            DestroySafely(buildingComplexGO);
             return false;
         }
 
-        List<PolygonVertexData> footprintVertexData = plotVertices2D
+        // --- CONFIGURE THE POLYGONBUILDINGGENERATOR ---
+        // 1. Set Building Footprint (vertexData)
+        List<PolygonVertexData> footprintForBuildingStructure = buildingFootprintVertices2D
             .Select(v2 => new PolygonVertexData { position = new Vector3(v2.x, 0, v2.y), addCornerElement = true })
             .ToList();
 
-        float signedArea = BuildingFootprintUtils.CalculateSignedAreaXZ(footprintVertexData);
+        float signedArea = BuildingFootprintUtils.CalculateSignedAreaXZ(footprintForBuildingStructure);
         if (signedArea > GeometryConstants.GeometricEpsilon) // If Clockwise (negative area)
         {
-            footprintVertexData.Reverse();
+            footprintForBuildingStructure.Reverse();
         }
 
-        buildingGenerator.vertexData = footprintVertexData;
+        buildingGenerator.vertexData = footprintForBuildingStructure;
+
+        // 2. Set Pavement Data
+        if (originalPavementPlotVertices2D != null && originalPavementPlotVertices2D.Count >= 3)
+        {
+            buildingGenerator.originalPavementPlotVertices2D = new List<Vector2>(originalPavementPlotVertices2D);
+        }
+        else
+        {
+            buildingGenerator.originalPavementPlotVertices2D = null;
+        }
+        buildingGenerator.pavementMaterial = this.pavementMaterial;
+        buildingGenerator.pavementOutset = this.buildingInsetFromPavementEdge;
+
+        // 3. Synchronize side data (for facades, etc.)
         buildingGenerator.SynchronizeSideData();
 
+        // 4. Assign Building Style
         buildingGenerator.buildingStyle = GetRandomStyle();
         if (buildingGenerator.buildingStyle == null)
         {
-            Debug.LogError($"Plot {plotIndex}: Critical - No BuildingStyleSO could be assigned for {buildingGO.name}. Destroying instance and pavement.");
-            DestroySafely(buildingGO);
-            DestroySafely(associatedPavementGO);
+            Debug.LogError($"Plot {plotIndex}: Critical - No BuildingStyleSO assigned for {buildingComplexGO.name}. Destroying instance.");
+            DestroySafely(buildingComplexGO);
             return false;
         }
 
+        // 5. Randomize Floors
         buildingGenerator.middleFloors = Random.Range(minFloors, maxFloors + 1);
 
+        // 6. Apply Style Variation Logic
+        if (Random.value < chanceForVariedSides && availableSideStylesForVariation != null && availableSideStylesForVariation.Count > 0)
+        {
+            buildingGenerator.useConsistentStyleForAllSides = false;
+            for (int i = 0; i < buildingGenerator.sideData.Count; i++) // sideData was synced above
+            {
+                if (Random.value < 0.5f)
+                {
+                    buildingGenerator.sideData[i].useCustomStyle = true;
+                    buildingGenerator.sideData[i].sideStylePreset = availableSideStylesForVariation[Random.Range(0, availableSideStylesForVariation.Count)];
+                }
+                else
+                {
+                    buildingGenerator.sideData[i].useCustomStyle = false;
+                }
+            }
+        }
+        else
+        {
+            buildingGenerator.useConsistentStyleForAllSides = true;
+        }
+
         // You can set other PolygonBuildingGenerator parameters here if desired:
-        // buildingGenerator.floorHeight = Random.Range(9f, 11f);
         // buildingGenerator.useMansardFloor = Random.value > 0.3f; 
         // etc. Otherwise, they will use the values from the prefab.
 
-        bool success = buildingGenerator.GenerateBuilding();
+        bool success = buildingGenerator.GenerateBuilding(); // Generates building parts AND pavement
 
         if (!success)
         {
-            Debug.LogWarning($"Plot {plotIndex}: Building generation failed for '{buildingGO.name}'. The building generator should have cleaned itself up. Destroying associated pavement.");
-            // buildingGenerator.ClearBuilding() should have been called internally.
-            // We still have buildingGO here, destroy it again just in case, though ClearBuilding should handle its children.
-            DestroySafely(buildingGO);
-            DestroySafely(associatedPavementGO);
+            Debug.LogWarning($"Plot {plotIndex}: Full building complex generation failed for '{buildingComplexGO.name}'. Destroying the main complex GO.");
+            DestroySafely(buildingComplexGO); // Destroy the PolygonBuildingGenerator's GameObject
             return false;
         }
 

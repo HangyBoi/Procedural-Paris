@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8ecb5da3d4386b84b977942dcf0e3c57, type: 3}
+  m_Name: Grey House Not Detailed
+  m_EditorClassIdentifier: 
+  defaultGroundFloorPrefabs:
+  - {fileID: 840262431670485971, guid: aa74bb2364622284ba1cc00d56aec33d, type: 3}
+  - {fileID: 3435898480930570988, guid: 26b6b37f1cd453f498ad414b0f3473d7, type: 3}
+  - {fileID: 5768072877802017965, guid: 19008e196509eca4e811823e83ce4b01, type: 3}
+  defaultMiddleFloorPrefabs:
+  - {fileID: 3661715251601147587, guid: 97e2b35813d744848a73657d9175be3b, type: 3}
+  - {fileID: 3501604703497272480, guid: 6b140ded6c912684597e395670cb55fe, type: 3}
+  defaultChimneyBodyPrefabs:
+  - {fileID: 3716927854529544225, guid: 297e9ae0173feed498e06d4fe8af2969, type: 3}
+  defaultChimneyCapPrefabs:
+  - {fileID: 5603749693001070441, guid: c0e1820a5d2f4574d8513a3302d6fb5b, type: 3}
+  defaultMansardWindowPrefabs:
+  - {fileID: 757365691267042281, guid: ba10f59d934614644b1d753a1dd719d7, type: 3}
+  defaultAtticWindowPrefabs:
+  - {fileID: 6023926734824447198, guid: 3fd23d9e5f228d54fac1963990d13991, type: 3}
+  defaultMansardFloorPrefabs:
+  - {fileID: 4794097862798657804, guid: a008a730605ad8540825dec5d28487ee, type: 3}
+  defaultAtticFloorPrefabs:
+  - {fileID: 2936507998635124413, guid: 979b7f3008fcff843bb5a78a6b225c0a, type: 3}
+  mansardCornerSets:
+  - targetCornerAngle: 90
+    angleTolerance: 5
+    cornerAssemblyPrefab: {fileID: 912778663916139423, guid: 440dff079265db640857efdc260f9af8,
+      type: 3}
+    coverageAlongNextSide: 5
+    coverageAlongPrevSide: 5
+  - targetCornerAngle: 225
+    angleTolerance: 5
+    cornerAssemblyPrefab: {fileID: 750656710070286286, guid: a822f1408cd84824d85118376ea05fef,
+      type: 3}
+    coverageAlongNextSide: 5
+    coverageAlongPrevSide: 5

@@ -116,24 +116,23 @@ public class FacadeGenerator
         ground = _buildingStyle.defaultGroundFloorPrefabs;
         middle = _buildingStyle.defaultMiddleFloorPrefabs;
 
-        if (sideIndex < 0 || sideIndex >= _sideData.Count)
+        if (!_settings.useConsistentStyleForAllSides && // Check the new flag
+            sideIndex >= 0 && sideIndex < _sideData.Count)
         {
-            Debug.LogWarning($"FacadeGenerator: sideIndex {sideIndex} out of bounds for sideData. Using default prefabs.");
-            return;
+            PolygonSideData currentSideSettings = _sideData[sideIndex];
+            if (currentSideSettings.useCustomStyle && currentSideSettings.sideStylePreset != null)
+            {
+                SideStyleSO styleSO = currentSideSettings.sideStylePreset;
+                if (styleSO.groundFloorPrefabs != null && styleSO.groundFloorPrefabs.Count > 0)
+                    ground = styleSO.groundFloorPrefabs;
+                if (styleSO.middleFloorPrefabs != null && styleSO.middleFloorPrefabs.Count > 0)
+                    middle = styleSO.middleFloorPrefabs;
+                // Note: Mansard and Attic prefabs from SideStyleSO are not used here yet,
+                // as facade instantiation on sloped roofs is not yet implemented.
+            }
         }
-
-        PolygonSideData currentSideSettings = _sideData[sideIndex];
-        if (currentSideSettings.useCustomStyle && currentSideSettings.sideStylePreset != null)
-        {
-            SideStyleSO styleSO = currentSideSettings.sideStylePreset;
-            // Override with style-specific prefabs if they are assigned and non-empty
-            if (styleSO.groundFloorPrefabs != null && styleSO.groundFloorPrefabs.Count > 0)
-                ground = styleSO.groundFloorPrefabs;
-            if (styleSO.middleFloorPrefabs != null && styleSO.middleFloorPrefabs.Count > 0)
-                middle = styleSO.middleFloorPrefabs;
-            // Note: Mansard and Attic prefabs from SideStyleSO are not used here yet,
-            // as facade instantiation on sloped roofs is not yet implemented.
-        }
+        // If useConsistentStyleForAllSides is true, or if the sideData conditions aren't met,
+        // the initial assignment from _buildingStyle (the main one) remains.
     }
 
     /// <summary>
