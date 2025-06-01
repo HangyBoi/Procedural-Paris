@@ -145,7 +145,7 @@ MonoBehaviour:
   CurrentStatePreset: " <sbspreset pkgurl=\"pkg://Red_Small_Bricks_with_Framed_Windows\"
     label=\"\" >\n  <presetinput identifier=\"$outputsize\" uid=\"1774086595\" type=\"8\"
     value=\"10,10\" />\n  <presetinput identifier=\"$randomseed\" uid=\"1053589393\"
-    type=\"4\" value=\"3707\" />\n  <presetinput identifier=\"Column_Switch\" uid=\"150867598\"
+    type=\"4\" value=\"1786\" />\n  <presetinput identifier=\"Column_Switch\" uid=\"150867598\"
     type=\"4\" value=\"0\" />\n  <presetinput identifier=\"_Base_Color_Switch\" uid=\"150876804\"
     type=\"4\" value=\"1\" />\n  <presetinput identifier=\"All_other_Maps_Switch\"
     uid=\"150876859\" type=\"4\" value=\"1\" />\n </sbspreset>\n"
@@ -192,7 +192,7 @@ MonoBehaviour:
           GuiDescription: 
           Type: 4
           WidgetType: 0
-        Data: 3707
+        Data: 1786
         NumericalDescription:
           DefaultValue: 0
           MinValue: 0
