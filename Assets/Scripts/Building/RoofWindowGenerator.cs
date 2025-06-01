@@ -9,6 +9,8 @@ public class RoofWindowGenerator
     private readonly BuildingStyleSO _buildingStyle;
     private readonly GeneratedBuildingElements _elementsStore;
 
+    private const float ACUTE_ANGLE_THRESHOLD_DEGREES = 60.0f;
+
     public RoofWindowGenerator(PolygonBuildingGenerator settings, List<PolygonVertexData> vertexData, List<PolygonSideData> sideData, BuildingStyleSO buildingStyle, GeneratedBuildingElements elementsStore)
     {
         _settings = settings;
@@ -83,10 +85,10 @@ public class RoofWindowGenerator
             int numSegments = CalculateNumSegments(sideDistance);
             float actualSegmentWidth = CalculateActualSegmentWidth(sideDistance, numSegments);
 
-            bool skipFirstSegment = true; // Always skip the first segment
-            bool skipLastSegment = true;  // Always skip the last segment
+            bool skipFirstSegment = true;
+            bool skipLastSegment = true;
 
-            if (numSegments <= 2) // Or <= 2 if you want at least one window even if ends are skipped
+            if (numSegments <= 1)
             {
                 skipFirstSegment = false;
                 skipLastSegment = false;

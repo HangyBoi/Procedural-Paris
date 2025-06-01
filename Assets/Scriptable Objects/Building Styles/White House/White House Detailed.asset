@@ -18,7 +18,6 @@ MonoBehaviour:
   - {fileID: 3435898480930570988, guid: a680f912372233f40ba20364b2d0a188, type: 3}
   - {fileID: 8708220564727177831, guid: 8b0764e68e330714caff9558e3ea3810, type: 3}
   defaultMiddleFloorPrefabs:
-  - {fileID: 3435898480930570988, guid: a680f912372233f40ba20364b2d0a188, type: 3}
   - {fileID: 2037035238946278173, guid: 0b3dbfb233be721438f86d90a2f55459, type: 3}
   - {fileID: 3037907641868205952, guid: 60110b24bf8915e418ef28729c2edec0, type: 3}
   defaultChimneyBodyPrefabs:

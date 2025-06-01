@@ -67,6 +67,7 @@ MonoBehaviour:
     addCornerElement: 0
   - position: {x: 50, y: 0, z: -100}
     addCornerElement: 0
+  useConsistentStyleForAllSides: 1
   sideData:
   - useCustomStyle: 0
     sideStylePreset: {fileID: 0}
@@ -82,6 +83,7 @@ MonoBehaviour:
     sideStylePreset: {fileID: 0}
   vertexSnapSize: 10
   minSideLengthUnits: 1
+  pavementOutset: 0.5
   middleFloors: 8
   floorHeight: 10
   scaleFacadesToFitSide: 1
@@ -108,3 +110,5 @@ MonoBehaviour:
   minMansardRiseForWindows: 10
   maxAtticHDistForWindows: 20
   minAtticRiseForWindows: 8
+  originalPavementPlotVertices2D: []
+  pavementMaterial: {fileID: 0}

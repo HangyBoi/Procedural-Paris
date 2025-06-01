@@ -1,5 +1,6 @@
-using UnityEngine;
+using Adobe.Substance.Connector;
 using System.Collections.Generic;
+using UnityEngine;
 
 /// <summary>
 /// Responsible for generating facade elements (ground, middle floors) of the building.
@@ -78,6 +79,22 @@ public class FacadeGenerator
                                                           sideParent.transform, actualSegmentWidth, false,
                                                           _settings.scaleFacadesToFitSide, _settings.nominalFacadeWidth);
 
+                    PrefabPropRandomizer propRandomizer = groundInstance.GetComponent<PrefabPropRandomizer>();
+                    if (propRandomizer != null)
+                    {
+                        propRandomizer.RandomizeProps();
+
+#if UNITY_EDITOR
+                        UnityEditor.EditorUtility.SetDirty(propRandomizer);
+                        UnityEditor.EditorUtility.SetDirty(groundInstance);
+
+                        foreach (var prop in propRandomizer.optionalProps)
+                        {
+                            if (prop != null) UnityEditor.EditorUtility.SetDirty(prop);
+                        }
+#endif
+                    }
+
                     if (groundInstance != null) currentSideGroup.groundFacadeSegments.Add(groundInstance);
                 }
                 currentBottomY += _settings.floorHeight;
@@ -97,6 +114,22 @@ public class FacadeGenerator
                         GameObject middleInstance = PrefabInstantiator.InstantiateSegment(currentMiddlePrefabs, middleFloorPivotPosition_world, baseSegmentRotation_world,
                                                               sideParent.transform, actualSegmentWidth, false,
                                                               _settings.scaleFacadesToFitSide, _settings.nominalFacadeWidth);
+
+                        PrefabPropRandomizer propRandomizer = middleInstance.GetComponent<PrefabPropRandomizer>();
+                        if (propRandomizer != null)
+                        {
+                            propRandomizer.RandomizeProps();
+
+#if UNITY_EDITOR
+                            UnityEditor.EditorUtility.SetDirty(propRandomizer);
+                            UnityEditor.EditorUtility.SetDirty(middleInstance);
+
+                            foreach (var prop in propRandomizer.optionalProps)
+                            {
+                                if (prop != null) UnityEditor.EditorUtility.SetDirty(prop);
+                            }
+#endif
+                        }
 
                         if (middleInstance != null) currentSideGroup.middleFacadeSegments.Add(middleInstance);
 
