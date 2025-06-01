@@ -33,7 +33,7 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _Base_Map:
-        m_Texture: {fileID: 2800000, guid: e07bad0622c9109429657537c44ae81e, type: 3}
+        m_Texture: {fileID: 2800000, guid: 72f38578761cc41419b65b57798424ee, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Height_Map:
@@ -41,11 +41,11 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Mask_Map:
-        m_Texture: {fileID: 2800000, guid: ee860a5e340f7f745b2b2ba5a3d3c838, type: 3}
+        m_Texture: {fileID: 2800000, guid: 019ac77ab9d925a4caff884a90211e73, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Normal_Map:
-        m_Texture: {fileID: 2800000, guid: accea596c8aa9f145b60dad80031da14, type: 3}
+        m_Texture: {fileID: 2800000, guid: d9b07db4739ea4a4a80b16b3d40cab37, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - unity_Lightmaps:
@@ -67,7 +67,7 @@ Material:
     - _AlphaDstBlend: 0
     - _AlphaSrcBlend: 1
     - _BlendMode: 0
-    - _Blend_Sharpness: 5
+    - _Blend_Sharpness: 1
     - _ConservativeDepthOffsetEnable: 0
     - _CullMode: 2
     - _CullModeForward: 2
@@ -80,7 +80,7 @@ Material:
     - _EnableFogOnTransparent: 1
     - _ExcludeFromTUAndAA: 0
     - _Height_Intensity: 0
-    - _Normal_Scale: 10
+    - _Normal_Scale: 8
     - _OpaqueCullMode: 2
     - _POM_Steps: 0
     - _RayTracing: 0
