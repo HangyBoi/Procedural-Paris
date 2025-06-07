@@ -16,7 +16,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &6287165640462090805
 Transform:
@@ -98,7 +98,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &595555039769928383
 Transform:
@@ -192,6 +192,11 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4320252946658129905, guid: cd43eef7b7ac8e348bd168feb7246eac,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 6450675071785356274, guid: cd43eef7b7ac8e348bd168feb7246eac,
         type: 3}
       propertyPath: m_LocalPosition.x
@@ -211,6 +216,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: Wooden barrel (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 9189706142267951483, guid: cd43eef7b7ac8e348bd168feb7246eac,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects:
@@ -288,10 +298,20 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5371899051894587220, guid: cd43eef7b7ac8e348bd168feb7246eac,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 9189706142267951483, guid: cd43eef7b7ac8e348bd168feb7246eac,
         type: 3}
       propertyPath: m_Name
       value: Wooden barrel
+      objectReference: {fileID: 0}
+    - target: {fileID: 9189706142267951483, guid: cd43eef7b7ac8e348bd168feb7246eac,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects:

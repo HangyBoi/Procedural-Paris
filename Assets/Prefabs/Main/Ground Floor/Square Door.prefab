@@ -15,7 +15,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &8327461235726839355
 Transform:
@@ -66,7 +66,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &7907490204046623286
 Transform:
@@ -100,7 +100,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &7917739152103527139
 Transform:
@@ -181,7 +181,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &9205527740260218079
 Transform:
@@ -207,6 +207,16 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 8327461235726839355}
     m_Modifications:
+    - target: {fileID: 106920103491707420, guid: 0a10e7e7916e6a442a3d68f233142532,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1145918322186596376, guid: 0a10e7e7916e6a442a3d68f233142532,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 2780595684227542820, guid: 0a10e7e7916e6a442a3d68f233142532,
         type: 3}
       propertyPath: m_LocalPosition.x
@@ -257,10 +267,35 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4752086835982564915, guid: 0a10e7e7916e6a442a3d68f233142532,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5151025701169677549, guid: 0a10e7e7916e6a442a3d68f233142532,
         type: 3}
       propertyPath: m_Name
       value: Wall Lamp R
+      objectReference: {fileID: 0}
+    - target: {fileID: 5151025701169677549, guid: 0a10e7e7916e6a442a3d68f233142532,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 5682599014164852845, guid: 0a10e7e7916e6a442a3d68f233142532,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 6946747812386706728, guid: 0a10e7e7916e6a442a3d68f233142532,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 7513819766682695670, guid: 0a10e7e7916e6a442a3d68f233142532,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -287,6 +322,16 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 8327461235726839355}
     m_Modifications:
+    - target: {fileID: 106920103491707420, guid: 0a10e7e7916e6a442a3d68f233142532,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1145918322186596376, guid: 0a10e7e7916e6a442a3d68f233142532,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 2780595684227542820, guid: 0a10e7e7916e6a442a3d68f233142532,
         type: 3}
       propertyPath: m_LocalPosition.x
@@ -337,10 +382,35 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4752086835982564915, guid: 0a10e7e7916e6a442a3d68f233142532,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5151025701169677549, guid: 0a10e7e7916e6a442a3d68f233142532,
         type: 3}
       propertyPath: m_Name
       value: Wall Lamp L
+      objectReference: {fileID: 0}
+    - target: {fileID: 5151025701169677549, guid: 0a10e7e7916e6a442a3d68f233142532,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 5682599014164852845, guid: 0a10e7e7916e6a442a3d68f233142532,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 6946747812386706728, guid: 0a10e7e7916e6a442a3d68f233142532,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 7513819766682695670, guid: 0a10e7e7916e6a442a3d68f233142532,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -376,6 +446,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: Plane
+      objectReference: {fileID: 0}
+    - target: {fileID: 1752611215313994045, guid: 82ea31e57857d284a87eca45bf39c7c9,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5844498157721422978, guid: 82ea31e57857d284a87eca45bf39c7c9,
         type: 3}
@@ -426,6 +501,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 90
+      objectReference: {fileID: 0}
+    - target: {fileID: 7602947931245960504, guid: 82ea31e57857d284a87eca45bf39c7c9,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
