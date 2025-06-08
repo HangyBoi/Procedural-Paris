@@ -50,15 +50,15 @@ LODGroup:
   m_AnimateCrossFading: 0
   m_LastLODIsBillboard: 0
   m_LODs:
-  - screenRelativeHeight: 0.48625877
+  - screenRelativeHeight: 0.51781255
     fadeTransitionWidth: 0
     renderers:
     - renderer: {fileID: 7189455744187746605}
-  - screenRelativeHeight: 0.30474392
+  - screenRelativeHeight: 0.21245445
     fadeTransitionWidth: 0
     renderers:
     - renderer: {fileID: 7507453921085225157}
-  - screenRelativeHeight: 0.01
+  - screenRelativeHeight: 0.0615
     fadeTransitionWidth: 0
     renderers:
     - renderer: {fileID: 5264033462513105668}
@@ -470,12 +470,17 @@ PrefabInstance:
     - target: {fileID: 6040115151218525341, guid: 0a1aff9216a9db94e850a592dc4713b0,
         type: 3}
       propertyPath: m_LODs.Array.data[0].screenRelativeHeight
-      value: 0.4757176
+      value: 0.722324
       objectReference: {fileID: 0}
     - target: {fileID: 6040115151218525341, guid: 0a1aff9216a9db94e850a592dc4713b0,
         type: 3}
       propertyPath: m_LODs.Array.data[1].screenRelativeHeight
-      value: 0.20351833
+      value: 0.39945167
+      objectReference: {fileID: 0}
+    - target: {fileID: 6040115151218525341, guid: 0a1aff9216a9db94e850a592dc4713b0,
+        type: 3}
+      propertyPath: m_LODs.Array.data[2].screenRelativeHeight
+      value: 0.051219393
       objectReference: {fileID: 0}
     - target: {fileID: 6298195847900645629, guid: 0a1aff9216a9db94e850a592dc4713b0,
         type: 3}
