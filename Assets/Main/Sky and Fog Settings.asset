@@ -30,7 +30,7 @@ MonoBehaviour:
     m_Value: {r: 0.7264151, g: 0.5690529, b: 0.38033998, a: 1}
   maxFogDistance:
     m_OverrideState: 1
-    m_Value: 1000
+    m_Value: 400
   mipFogMaxMip:
     m_OverrideState: 0
     m_Value: 0.5
@@ -60,7 +60,7 @@ MonoBehaviour:
     m_Value: 1
   depthExtent:
     m_OverrideState: 1
-    m_Value: 300
+    m_Value: 100
   denoisingMode:
     m_OverrideState: 1
     m_Value: 2
@@ -576,13 +576,13 @@ MonoBehaviour:
     m_Value: 4
   cascadeShadowSplit0:
     m_OverrideState: 1
-    m_Value: 0.15
+    m_Value: 0.175
   cascadeShadowSplit1:
     m_OverrideState: 1
-    m_Value: 0.3
+    m_Value: 0.35
   cascadeShadowSplit2:
     m_OverrideState: 1
-    m_Value: 0.55
+    m_Value: 0.525
   cascadeShadowBorder0:
     m_OverrideState: 1
     m_Value: 0

@@ -88,9 +88,6 @@ public class CornerGenerator
             }
             else
             {
-                // If there are no body prefabs, but we might place a cap,
-                // the cap should be placed as if the bodies existed.
-                // So, calculate where the top of these hypothetical bodies would be.
                 currentElementBaseY_local = chimneyBodyPrefabHeight * totalBodySegments;
             }
 
@@ -112,7 +109,31 @@ public class CornerGenerator
                     cornerRoot, cornerElementWidth, true,
                     false, _settings.nominalFacadeWidth);
 
-                if (capInstance != null) _elementsStore.allCornerCaps.Add(capInstance);
+
+                if (capInstance != null)
+                {
+                    _elementsStore.allCornerCaps.Add(capInstance);
+
+                    // --- INTEGRATE PrefabPropRandomizer FOR CAPS HERE ---
+                    PrefabPropRandomizer propRandomizer = capInstance.GetComponent<PrefabPropRandomizer>();
+                    if (propRandomizer != null)
+                    {
+                        propRandomizer.RandomizeProps();
+
+#if UNITY_EDITOR
+                        // Mark as dirty so changes are saved if generating in editor
+                        UnityEditor.EditorUtility.SetDirty(propRandomizer);
+                        UnityEditor.EditorUtility.SetDirty(capInstance); // The instance itself
+
+                        // Also mark the individual props as dirty so their active state change is saved
+                        foreach (var prop in propRandomizer.optionalProps)
+                        {
+                            if (prop != null) UnityEditor.EditorUtility.SetDirty(prop);
+                        }
+#endif
+                    }
+                    // --- END OF INTEGRATION ---
+                }
             }
         }
     }

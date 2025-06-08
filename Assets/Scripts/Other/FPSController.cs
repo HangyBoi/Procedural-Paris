@@ -69,8 +69,6 @@ public class FPSController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.F))
         {
             isFlying = !isFlying;
-            Debug.Log($"Flight mode: {(isFlying ? "ON" : "OFF")}");
-
             velocity.y = 0;
         }
 
