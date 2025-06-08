@@ -1,8 +1,16 @@
-// PavementGenerator.cs
+// @Nichita Cebotari
+// *Explanatory Comments and Headers were written with help of AI*
+// *General Review, Formatting, Optimization and Code Cleanup were done by AI*
+//
+//  This script is responsible for generating pavement areas in a procedural generation context, based on a 2D polygon footprint defined by vertices.
+//
+
 using UnityEngine;
 using System.Collections.Generic;
-using System.Linq;
 
+/// <summary>
+/// Generates and manages a procedural mesh for a pavement area.
+/// </summary>
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
 public class PavementGenerator : MonoBehaviour
 {
@@ -10,95 +18,107 @@ public class PavementGenerator : MonoBehaviour
     private MeshRenderer _meshRenderer;
     private Mesh _mesh;
 
-    void Awake()
+    private void Awake()
     {
-        _meshFilter = GetComponent<MeshFilter>();
-        _meshRenderer = GetComponent<MeshRenderer>();
-        _mesh = new Mesh { name = "PavementInstanceMesh" };
-        _meshFilter.mesh = _mesh;
+        EnsureInitialized();
     }
 
-    public void GeneratePavement(List<Vector2> pavementPlotVertices2D, Material materialToApply)
+    /// <summary>
+    /// Ensures that all required components and the mesh object are ready for use.
+    /// </summary>
+    private void EnsureInitialized()
     {
-        if (_meshFilter == null) _meshFilter = GetComponent<MeshFilter>(); // Ensure components are fetched if Awake hasn't run
+        if (_meshFilter == null) _meshFilter = GetComponent<MeshFilter>();
         if (_meshRenderer == null) _meshRenderer = GetComponent<MeshRenderer>();
 
-        if (_mesh == null) // If Awake hasn't run or mesh wasn't set
+        // Create a mesh if it doesn't exist or if the filter is pointing to a different mesh.
+        if (_mesh == null || _meshFilter.sharedMesh != _mesh)
         {
-            _mesh = new Mesh { name = "PavementInstanceMesh_DirectInit" }; // Give a slightly different name for debugging
-            if (_meshFilter != null)
-            {
-                _meshFilter.mesh = _mesh;
-            }
-            else
-            {
-                Debug.LogError("PavementGenerator: MeshFilter is null, cannot assign mesh.", this);
-                return;
-            }
+            _mesh = new Mesh { name = "PavementInstanceMesh" };
+            _meshFilter.mesh = _mesh;
         }
-        else if (_meshFilter.mesh != _mesh)
-        {
-            _meshFilter.mesh = _mesh; // Ensure the mesh filter is using the correct mesh
-        }
-        _mesh.Clear(); // Clear any previous data
+    }
 
+    /// <summary>
+    /// Generates the pavement mesh from a 2D polygon footprint.
+    /// </summary>
+    /// <param name="pavementPlotVertices2D">The list of 2D vertices defining the pavement shape.</param>
+    /// <param name="materialToApply">The material to apply to the generated pavement.</param>
+    public void GeneratePavement(List<Vector2> pavementPlotVertices2D, Material materialToApply)
+    {
+        EnsureInitialized();
+        _mesh.Clear();
+
+        // A valid polygon requires at least 3 vertices.
         if (pavementPlotVertices2D == null || pavementPlotVertices2D.Count < 3)
         {
-            // Debug.LogWarning("PavementGenerator: Invalid footprint (null or < 3 vertices). Clearing mesh.", this);
-            gameObject.SetActive(false); // Hide if invalid
+            gameObject.SetActive(false);
             return;
         }
 
-        gameObject.SetActive(true); // Ensure it's active if we have valid data
+        gameObject.SetActive(true);
 
-        List<Vector3> vertices3D = pavementPlotVertices2D.Select(v2 => new Vector3(v2.x, 0, v2.y)).ToList();
-        List<int> triangles;
-
-        // Ensure vertices are counter-clockwise for correct normal calculation by TriangulatePolygonEarClipping
-        // For a flat pavement on Y=0, we want the normal to be (0,1,0).
-        // CalculateSignedAreaXZ gives negative for CCW and positive for CW when viewed from +Y.
-        // We want CCW.
-        float signedArea = BuildingFootprintUtils.CalculateSignedAreaXZ(vertices3D);
-        if (signedArea > GeometryConstants.GeometricEpsilon) // If Clockwise (positive area for XZ plane)
+        // Convert 2D vertices to 3D, assuming a flat plane at Y=0.
+        List<Vector3> vertices3D = new List<Vector3>(pavementPlotVertices2D.Count);
+        foreach (var v2 in pavementPlotVertices2D)
         {
-            vertices3D.Reverse(); // Make it Counter-Clockwise
+            vertices3D.Add(new Vector3(v2.x, 0, v2.y));
         }
 
+        // Ensure vertex winding order is counter-clockwise (CCW) for correct triangulation and normals.
+        if (BuildingFootprintUtils.CalculateSignedAreaXZ(vertices3D) > GeometryConstants.GeometricEpsilon)
+        {
+            vertices3D.Reverse(); // Reverse if clockwise.
+        }
 
-        if (GeometryUtils.TriangulatePolygonEarClipping(vertices3D, out triangles))
+        // Triangulate the polygon shape to create the mesh triangles.
+        if (GeometryUtils.TriangulatePolygonEarClipping(vertices3D, out List<int> triangles))
         {
             _mesh.SetVertices(vertices3D);
             _mesh.SetTriangles(triangles, 0);
-            _mesh.RecalculateNormals(); // Normals should point up
+            _mesh.RecalculateNormals(); // Normals should point up (towards +Y).
             _mesh.RecalculateBounds();
 
-            if (materialToApply != null)
-            {
-                _meshRenderer.sharedMaterial = materialToApply;
-            }
-            else
-            {
-                Debug.LogWarning($"PavementGenerator: Material not supplied for {gameObject.name}. Using default.", this);
-                // Fallback if no material is assigned
-                if (_meshRenderer.sharedMaterial == null) // Only if it doesn't have one already
-                {
-                    // Ensure you have a fallback material or shader. For HDRP/URP, use appropriate default.
-                    var defaultShader = Shader.Find("Standard"); // Or "HDRP/Lit", "URP/Lit"
-                    if (defaultShader != null)
-                        _meshRenderer.sharedMaterial = new Material(defaultShader);
-                    else
-                        Debug.LogError("PavementGenerator: Default shader not found for fallback material.");
-                }
-            }
+            ApplyMaterial(materialToApply);
         }
         else
         {
-            Debug.LogError($"PavementGenerator: Failed to triangulate pavement for {gameObject.name}. Clearing mesh.", this);
-            _mesh.Clear();
-            gameObject.SetActive(false); // Hide if triangulation failed
+            Debug.LogError($"PavementGenerator: Failed to triangulate pavement for {gameObject.name}. Disabling object.", this);
+            gameObject.SetActive(false);
         }
     }
 
+    /// <summary>
+    /// Applies the specified material, with a fallback to a default material if none is provided.
+    /// </summary>
+    private void ApplyMaterial(Material materialToApply)
+    {
+        if (materialToApply != null)
+        {
+            _meshRenderer.sharedMaterial = materialToApply;
+        }
+        else
+        {
+            Debug.LogWarning($"PavementGenerator: Material not supplied for {gameObject.name}. Using default.", this);
+            // Fallback to a standard material if none is assigned.
+            if (_meshRenderer.sharedMaterial == null)
+            {
+                var defaultShader = Shader.Find("Standard");
+                if (defaultShader != null)
+                {
+                    _meshRenderer.sharedMaterial = new Material(defaultShader);
+                }
+                else
+                {
+                    Debug.LogError("PavementGenerator: Default 'Standard' shader not found for fallback material.");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Clears the generated mesh and deactivates the GameObject.
+    /// </summary>
     public void ClearPavement()
     {
         if (_mesh != null)
@@ -108,12 +128,11 @@ public class PavementGenerator : MonoBehaviour
         gameObject.SetActive(false);
     }
 
-    void OnDestroy()
+    private void OnDestroy()
     {
+        // Clean up the created mesh asset to prevent memory leaks in the editor.
         if (_mesh != null)
         {
-            // If this component is destroyed, clean up the mesh it created
-            // especially if it was instantiated and not part of a prefab asset.
             if (Application.isEditor && !Application.isPlaying)
                 DestroyImmediate(_mesh);
             else

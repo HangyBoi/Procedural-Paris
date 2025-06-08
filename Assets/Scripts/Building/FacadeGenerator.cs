@@ -1,4 +1,11 @@
-using Adobe.Substance.Connector;
+// @Nichita Cebotari
+// *Explanatory Comments and Headers were written with help of AI*
+// *General Review, Formatting, Optimization and Code Cleanup were done by AI*
+//
+//  This script is responsible for generating facade elements (ground and middle floors) of a building in a procedural generation context.
+//  It uses the provided settings, vertex data, and side data to create facade segments based on the building's polygon shape and style preferences.
+//
+
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -13,6 +20,9 @@ public class FacadeGenerator
     private readonly BuildingStyleSO _buildingStyle;
     private readonly GeneratedBuildingElements _elementsStore;
 
+    // Pre-calculated vertical offset for placing prefabs, assuming their pivot is at the base.
+    private readonly float _pivotOffsetY;
+
     public FacadeGenerator(PolygonBuildingGenerator settings, List<PolygonVertexData> vertexData, List<PolygonSideData> sideData, BuildingStyleSO buildingStyle, GeneratedBuildingElements elementsStore)
     {
         _settings = settings;
@@ -20,123 +30,130 @@ public class FacadeGenerator
         _sideData = sideData;
         _buildingStyle = buildingStyle;
         _elementsStore = elementsStore;
+
+        _pivotOffsetY = _settings.floorHeight * 0.5f;
     }
 
     /// <summary>
-    /// Generates all facade elements for the building and parents them to facadeRoot.
+    /// Generates all facade elements for the building and parents them to a root transform.
+    /// Iterates through each side of the building polygon and generates the required facade segments.
     /// </summary>
+    /// <param name="facadeRoot">The parent transform for all generated facade elements.</param>
     public void GenerateAllFacades(Transform facadeRoot)
     {
-        if (_vertexData.Count < 2) return; // Need at least two vertices to form a side
-
-        // Pivot offset to center prefabs vertically, assuming pivot is at base of prefab
-        float pivotOffsetVertical = _settings.floorHeight * 0.5f;
+        // A building side requires at least two vertices.
+        if (_vertexData.Count < 2) return;
 
         for (int i = 0; i < _vertexData.Count; i++)
         {
-            GameObject sideParent = new GameObject($"Side_{i}_Facades");
-            sideParent.transform.SetParent(facadeRoot, false);
+            GenerateFacadesForSide(i, facadeRoot);
+        }
+    }
 
-            Vector3 p1_local = _vertexData[i].position;
-            Vector3 p2_local = _vertexData[(i + 1) % _vertexData.Count].position;
-            Vector3 sideVector = p2_local - p1_local;
-            float sideDistance = sideVector.magnitude;
+    /// <summary>
+    /// Generates all facade segments for a single side of the building.
+    /// </summary>
+    /// <param name="sideIndex">The index of the side to generate facades for.</param>
+    /// <param name="facadeRoot">The root transform for all facade elements.</param>
+    private void GenerateFacadesForSide(int sideIndex, Transform facadeRoot)
+    {
+        // Get the vertices that define the current side.
+        Vector3 p1_local = _vertexData[sideIndex].position;
+        Vector3 p2_local = _vertexData[(sideIndex + 1) % _vertexData.Count].position;
 
-            if (sideDistance < GeometryConstants.GeometricEpsilon) continue; // Skip zero-length sides
+        Vector3 sideVector = p2_local - p1_local;
+        float sideDistance = sideVector.magnitude;
 
-            SideElementGroup currentSideGroup = _elementsStore.facadeElementsPerSide.Find(sg => sg.sideIndex == i);
-            if (currentSideGroup == null) { continue; }
+        // Skip sides that are too small to generate anything on.
+        if (sideDistance < GeometryConstants.GeometricEpsilon) return;
 
-            Vector3 sideDirection = sideVector.normalized;
-            // Calculate normal using the polygon's winding order for consistent outward direction
-            Vector3 sideNormal = BuildingFootprintUtils.CalculateSideNormal(p1_local, p2_local, _vertexData);
+        SideElementGroup currentSideGroup = _elementsStore.facadeElementsPerSide.Find(sg => sg.sideIndex == sideIndex);
+        if (currentSideGroup == null) return;
 
-            int numSegments = CalculateNumSegments(sideDistance);
-            float actualSegmentWidth = CalculateActualSegmentWidth(sideDistance, numSegments);
+        // Create a parent object for this side's elements to keep the hierarchy organized.
+        GameObject sideParent = new GameObject($"Side_{sideIndex}_Facades");
+        sideParent.transform.SetParent(facadeRoot, false);
 
-            GetSidePrefabLists(i, out var currentGroundPrefabs, out var currentMiddlePrefabs);
+        // Determine the side's orientation.
+        Vector3 sideDirection = sideVector.normalized;
+        Vector3 sideNormal = BuildingFootprintUtils.CalculateSideNormal(p1_local, p2_local, _vertexData);
+        Quaternion baseSegmentRotation_local = Quaternion.LookRotation(sideNormal);
 
+        // Calculate segmentation based on side length and desired facade width.
+        int numSegments = CalculateNumSegments(sideDistance);
+        float actualSegmentWidth = CalculateActualSegmentWidth(sideDistance, numSegments);
 
-            for (int j = 0; j < numSegments; j++)
+        // Retrieve the appropriate prefab lists for this side (default or custom style).
+        GetSidePrefabLists(sideIndex, out var groundPrefabs, out var middlePrefabs);
+
+        // Generate segments for this side.
+        for (int j = 0; j < numSegments; j++)
+        {
+            // Calculate the base position for this segment in local space.
+            Vector3 segmentBaseHorizontalPos_local = p1_local + sideDirection * (actualSegmentWidth * (j + 0.5f));
+            float currentBottomY = 0f;
+
+            // --- Instantiate Ground Floor ---
+            InstantiateFacadeFloor(groundPrefabs, segmentBaseHorizontalPos_local, baseSegmentRotation_local, currentBottomY,
+                                   sideParent.transform, actualSegmentWidth, currentSideGroup.groundFacadeSegments);
+            currentBottomY += _settings.floorHeight;
+
+            // --- Instantiate Middle Floors ---
+            for (int floor = 0; floor < _settings.middleFloors; floor++)
             {
-                // Base position for this segment (center of the segment on the ground) - LOCAL SPACE
-                Vector3 segmentBaseHorizontalPos_local = p1_local + sideDirection * (actualSegmentWidth * (j + 0.5f));
-                // Rotation for this segment - LOCAL SPACE
-                Quaternion baseSegmentRotation_local = Quaternion.LookRotation(sideNormal);
-                float currentBottomY = 0;
-
-                // --- Ground Floor ---
-                if (currentGroundPrefabs != null && currentGroundPrefabs.Count > 0)
-                {
-                    // LOCAL SPACE pivot position
-                    Vector3 groundFloorPivotPosition_local = segmentBaseHorizontalPos_local + Vector3.up * (currentBottomY + pivotOffsetVertical);
-
-                    // Convert to WORLD SPACE for instantiation
-                    Vector3 groundFloorPivotPosition_world = _settings.transform.TransformPoint(groundFloorPivotPosition_local);
-                    Quaternion baseSegmentRotation_world = _settings.transform.rotation * baseSegmentRotation_local;
-
-                    GameObject groundInstance = PrefabInstantiator.InstantiateSegment(currentGroundPrefabs, groundFloorPivotPosition_world, baseSegmentRotation_world,
-                                                          sideParent.transform, actualSegmentWidth, false,
-                                                          _settings.scaleFacadesToFitSide, _settings.nominalFacadeWidth);
-
-                    PrefabPropRandomizer propRandomizer = groundInstance.GetComponent<PrefabPropRandomizer>();
-                    if (propRandomizer != null)
-                    {
-                        propRandomizer.RandomizeProps();
-
-#if UNITY_EDITOR
-                        UnityEditor.EditorUtility.SetDirty(propRandomizer);
-                        UnityEditor.EditorUtility.SetDirty(groundInstance);
-
-                        foreach (var prop in propRandomizer.optionalProps)
-                        {
-                            if (prop != null) UnityEditor.EditorUtility.SetDirty(prop);
-                        }
-#endif
-                    }
-
-                    if (groundInstance != null) currentSideGroup.groundFacadeSegments.Add(groundInstance);
-                }
+                InstantiateFacadeFloor(middlePrefabs, segmentBaseHorizontalPos_local, baseSegmentRotation_local, currentBottomY,
+                                       sideParent.transform, actualSegmentWidth, currentSideGroup.middleFacadeSegments);
                 currentBottomY += _settings.floorHeight;
+            }
+        }
+    }
 
-                // --- Middle Floors ---
-                if (currentMiddlePrefabs != null && currentMiddlePrefabs.Count > 0)
-                {
-                    for (int floor = 0; floor < _settings.middleFloors; floor++)
-                    {
-                        // LOCAL SPACE pivot position
-                        Vector3 middleFloorPivotPosition_local = segmentBaseHorizontalPos_local + Vector3.up * (currentBottomY + pivotOffsetVertical);
+    /// <summary>
+    /// Instantiates and configures a single facade segment for one floor.
+    /// </summary>
+    private void InstantiateFacadeFloor(List<GameObject> prefabs, Vector3 localSegmentBasePos, Quaternion localSegmentRotation,
+        float yLevel, Transform parent, float segmentWidth, List<GameObject> storageList)
+    {
+        if (prefabs == null || prefabs.Count == 0) return;
 
-                        // Convert to WORLD SPACE for instantiation
-                        Vector3 middleFloorPivotPosition_world = _settings.transform.TransformPoint(middleFloorPivotPosition_local);
-                        Quaternion baseSegmentRotation_world = _settings.transform.rotation * baseSegmentRotation_local;
+        // Calculate final position and rotation in world space.
+        Vector3 localPivotPosition = localSegmentBasePos + Vector3.up * (yLevel + _pivotOffsetY);
+        Vector3 worldPivotPosition = _settings.transform.TransformPoint(localPivotPosition);
+        Quaternion worldRotation = _settings.transform.rotation * localSegmentRotation;
 
-                        GameObject middleInstance = PrefabInstantiator.InstantiateSegment(currentMiddlePrefabs, middleFloorPivotPosition_world, baseSegmentRotation_world,
-                                                              sideParent.transform, actualSegmentWidth, false,
-                                                              _settings.scaleFacadesToFitSide, _settings.nominalFacadeWidth);
+        GameObject instance = PrefabInstantiator.InstantiateSegment(
+            prefabs, worldPivotPosition, worldRotation, parent, segmentWidth,
+            false, _settings.scaleFacadesToFitSide, _settings.nominalFacadeWidth);
 
-                        PrefabPropRandomizer propRandomizer = middleInstance.GetComponent<PrefabPropRandomizer>();
-                        if (propRandomizer != null)
-                        {
-                            propRandomizer.RandomizeProps();
+        ProcessPrefabRandomizer(instance);
+
+        if (instance != null)
+        {
+            storageList.Add(instance);
+        }
+    }
+
+    /// <summary>
+    /// Finds and executes a PrefabPropRandomizer on the given instance, if it exists.
+    /// </summary>
+    private void ProcessPrefabRandomizer(GameObject instance)
+    {
+        if (instance == null) return;
+
+        var propRandomizer = instance.GetComponent<PrefabPropRandomizer>();
+        if (propRandomizer != null)
+        {
+            propRandomizer.RandomizeProps();
 
 #if UNITY_EDITOR
-                            UnityEditor.EditorUtility.SetDirty(propRandomizer);
-                            UnityEditor.EditorUtility.SetDirty(middleInstance);
-
-                            foreach (var prop in propRandomizer.optionalProps)
-                            {
-                                if (prop != null) UnityEditor.EditorUtility.SetDirty(prop);
-                            }
-#endif
-                        }
-
-                        if (middleInstance != null) currentSideGroup.middleFacadeSegments.Add(middleInstance);
-
-                        currentBottomY += _settings.floorHeight;
-                    }
-                }
+            // Mark objects as dirty to ensure changes are saved in the editor scene.
+            UnityEditor.EditorUtility.SetDirty(propRandomizer);
+            UnityEditor.EditorUtility.SetDirty(instance);
+            foreach (var prop in propRandomizer.optionalProps)
+            {
+                if (prop != null) UnityEditor.EditorUtility.SetDirty(prop);
             }
+#endif
         }
     }
 
@@ -145,27 +162,23 @@ public class FacadeGenerator
     /// </summary>
     private void GetSidePrefabLists(int sideIndex, out List<GameObject> ground, out List<GameObject> middle)
     {
-        // Start with defaults from the main BuildingStyleSO
+        // Start with default styles from the main building settings.
         ground = _buildingStyle.defaultGroundFloorPrefabs;
         middle = _buildingStyle.defaultMiddleFloorPrefabs;
 
-        if (!_settings.useConsistentStyleForAllSides && // Check the new flag
-            sideIndex >= 0 && sideIndex < _sideData.Count)
+        bool canUseCustomStyle = !_settings.useConsistentStyleForAllSides && sideIndex >= 0 && sideIndex < _sideData.Count;
+        if (!canUseCustomStyle) return;
+
+        // If allowed, check for a custom style override on this specific side.
+        PolygonSideData currentSideSettings = _sideData[sideIndex];
+        if (currentSideSettings.useCustomStyle && currentSideSettings.sideStylePreset != null)
         {
-            PolygonSideData currentSideSettings = _sideData[sideIndex];
-            if (currentSideSettings.useCustomStyle && currentSideSettings.sideStylePreset != null)
-            {
-                SideStyleSO styleSO = currentSideSettings.sideStylePreset;
-                if (styleSO.groundFloorPrefabs != null && styleSO.groundFloorPrefabs.Count > 0)
-                    ground = styleSO.groundFloorPrefabs;
-                if (styleSO.middleFloorPrefabs != null && styleSO.middleFloorPrefabs.Count > 0)
-                    middle = styleSO.middleFloorPrefabs;
-                // Note: Mansard and Attic prefabs from SideStyleSO are not used here yet,
-                // as facade instantiation on sloped roofs is not yet implemented.
-            }
+            SideStyleSO styleSO = currentSideSettings.sideStylePreset;
+            if (styleSO.groundFloorPrefabs != null && styleSO.groundFloorPrefabs.Count > 0)
+                ground = styleSO.groundFloorPrefabs;
+            if (styleSO.middleFloorPrefabs != null && styleSO.middleFloorPrefabs.Count > 0)
+                middle = styleSO.middleFloorPrefabs;
         }
-        // If useConsistentStyleForAllSides is true, or if the sideData conditions aren't met,
-        // the initial assignment from _buildingStyle (the main one) remains.
     }
 
     /// <summary>
@@ -173,23 +186,22 @@ public class FacadeGenerator
     /// </summary>
     private int CalculateNumSegments(float sideDistance)
     {
-        if (_settings.nominalFacadeWidth <= GeometryConstants.GeometricEpsilon)
-            return Mathf.Max(1, _settings.minSideLengthUnits > 0 ? _settings.minSideLengthUnits : 1);
+        if (_settings.nominalFacadeWidth <= GeometryConstants.GeometricEpsilon) return 1;
 
         int num;
+        int minSegments = Mathf.Max(1, _settings.minSideLengthUnits);
+
         if (_settings.scaleFacadesToFitSide)
         {
-            // If scaling, round to nearest whole number of segments, ensuring minimum
-            num = Mathf.Max(_settings.minSideLengthUnits > 0 ? _settings.minSideLengthUnits : 1,
-                            Mathf.RoundToInt(sideDistance / _settings.nominalFacadeWidth));
+            // When scaling, round to the nearest whole number of segments.
+            num = Mathf.RoundToInt(sideDistance / _settings.nominalFacadeWidth);
         }
         else
         {
-            // If not scaling, fit as many nominal-width segments as possible, ensuring minimum
-            num = Mathf.Max(_settings.minSideLengthUnits > 0 ? _settings.minSideLengthUnits : 1,
-                            Mathf.FloorToInt(sideDistance / _settings.nominalFacadeWidth));
+            // When not scaling, fit as many fixed-width segments as possible.
+            num = Mathf.FloorToInt(sideDistance / _settings.nominalFacadeWidth);
         }
-        return Mathf.Max(1, num); // Ensure at least one segment
+        return Mathf.Max(minSegments, num);
     }
 
     /// <summary>
@@ -198,7 +210,7 @@ public class FacadeGenerator
     /// </summary>
     private float CalculateActualSegmentWidth(float sideDistance, int numSegments)
     {
-        if (numSegments == 0) return _settings.nominalFacadeWidth; // Avoid division by zero
+        if (numSegments == 0) return _settings.nominalFacadeWidth; // Avoid division by zero.
         return _settings.scaleFacadesToFitSide ? (sideDistance / numSegments) : _settings.nominalFacadeWidth;
     }
 }

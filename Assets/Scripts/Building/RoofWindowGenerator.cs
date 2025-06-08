@@ -1,6 +1,16 @@
+// @Nichita Cebotari
+// *Explanatory Comments and Headers were written with help of AI*
+// *General Review, Formatting, Optimization and Code Cleanup were done by AI*
+//
+//  This script is responsible for generating window elements on procedural roof surfaces, specifically for Mansard and Attic roofs.
+//
+
 using UnityEngine;
 using System.Collections.Generic;
 
+/// <summary>
+/// Responsible for generating and placing windows on procedural roof surfaces.
+/// </summary>
 public class RoofWindowGenerator
 {
     private readonly PolygonBuildingGenerator _settings;
@@ -8,8 +18,6 @@ public class RoofWindowGenerator
     private readonly List<PolygonSideData> _sideData;
     private readonly BuildingStyleSO _buildingStyle;
     private readonly GeneratedBuildingElements _elementsStore;
-
-    private const float ACUTE_ANGLE_THRESHOLD_DEGREES = 60.0f;
 
     public RoofWindowGenerator(PolygonBuildingGenerator settings, List<PolygonVertexData> vertexData, List<PolygonSideData> sideData, BuildingStyleSO buildingStyle, GeneratedBuildingElements elementsStore)
     {
@@ -20,121 +28,192 @@ public class RoofWindowGenerator
         _elementsStore = elementsStore;
     }
 
+    /// <summary>
+    /// Main entry point to generate all enabled roof windows (Mansard and/or Attic).
+    /// </summary>
+    /// <param name="roofWindowsRoot">The parent transform for all window parent containers.</param>
+    /// <param name="generatedRoofs">References to the generated roof GameObjects.</param>
     public void GenerateAllWindows(Transform roofWindowsRoot, GeneratedRoofObjects generatedRoofs)
     {
-        if (!_settings.placeMansardWindows && !_settings.placeAtticWindows) return;
-        if (_vertexData.Count < 3) return;
+        if ((!_settings.placeMansardWindows && !_settings.placeAtticWindows) || _vertexData.Count < 3) return;
 
-        // --- Mansard Window Setup ---
-        GameObject mansardWindowsParent = null;
-        bool canGenerateMansardWindows = _settings.placeMansardWindows &&
-                                         _settings.useMansardFloor &&
-                                         generatedRoofs.MansardRoofObject != null &&
-                                         _settings.mansardRiseHeight >= _settings.minMansardRiseForWindows &&
-                                         _settings.mansardSlopeHorizontalDistance <= _settings.maxMansardHDistForWindows;
+        // --- Setup Window Layers ---
+        var mansardContext = SetupWindowLayer(
+            "Mansard", roofWindowsRoot, generatedRoofs.MansardRoofObject,
+            _settings.placeMansardWindows, _settings.useMansardFloor,
+            _settings.mansardRiseHeight, _settings.minMansardRiseForWindows,
+            _settings.mansardSlopeHorizontalDistance, _settings.maxMansardHDistForWindows,
+            _settings.mansardWindowInset, _buildingStyle.defaultMansardWindowPrefabs);
 
-        if (canGenerateMansardWindows)
+        var atticContext = SetupWindowLayer(
+            "Attic", roofWindowsRoot, generatedRoofs.AtticRoofObject,
+            _settings.placeAtticWindows, _settings.useAtticFloor,
+            _settings.atticRiseHeight, _settings.minAtticRiseForWindows,
+            _settings.atticSlopeHorizontalDistance, _settings.maxAtticHDistForWindows,
+            _settings.atticWindowInset, _buildingStyle.defaultAtticWindowPrefabs);
+
+        if (!mansardContext.canGenerate && !atticContext.canGenerate) return;
+
+        // Iterate through each side of the building to place windows segment by segment.
+        for (int sideIdx = 0; sideIdx < _vertexData.Count; sideIdx++)
         {
-            mansardWindowsParent = new GameObject("Mansard Windows");
-            mansardWindowsParent.transform.SetParent(roofWindowsRoot, false);
+            GenerateWindowsForSide(sideIdx, mansardContext, atticContext);
         }
-        else if (_settings.placeMansardWindows && _settings.useMansardFloor) // Log if general conditions met but thresholds failed
+    }
+
+    /// <summary>
+    /// Sets up the context for a specific window layer (Mansard or Attic), checking if generation is possible.
+    /// </summary>
+    /// <returns>A context object containing placement information for the layer.</returns>
+    private WindowLayerContext SetupWindowLayer(string name, Transform root, GameObject roofObj, bool placeFlag, bool useFlag, float rise, float minRise, float hDist, float maxHDist, float inset, List<GameObject> prefabs)
+    {
+        var context = new WindowLayerContext(name, roofObj, inset, prefabs);
+        context.canGenerate = placeFlag && useFlag && roofObj != null && rise >= minRise && hDist <= maxHDist;
+
+        if (context.canGenerate)
         {
-            if (generatedRoofs.MansardRoofObject == null)
-                Debug.LogWarning("RoofWindowGenerator: Mansard windows enabled, but Mansard Roof Object is null.");
-            else if (_settings.mansardRiseHeight < _settings.minMansardRiseForWindows)
-                Debug.Log($"RoofWindowGenerator: Mansard windows skipped. Mansard Rise Height ({_settings.mansardRiseHeight}) is less than MinRiseForWindows ({_settings.minMansardRiseForWindows}).");
-            else if (_settings.mansardSlopeHorizontalDistance < _settings.maxMansardHDistForWindows)
-                Debug.Log($"RoofWindowGenerator: Mansard windows skipped. Mansard Slope Horizontal Distance ({_settings.mansardSlopeHorizontalDistance}) is less than MinHDistForWindows ({_settings.maxMansardHDistForWindows}).");
+            var parentGo = new GameObject($"{name} Windows");
+            parentGo.transform.SetParent(root, false);
+            context.parent = parentGo.transform;
         }
+        return context;
+    }
 
-        // --- Attic Window Setup ---
-        GameObject atticWindowsParent = null;
-        bool canGenerateAtticWindows = _settings.placeAtticWindows &&
-                                       _settings.useAtticFloor &&
-                                       generatedRoofs.AtticRoofObject != null &&
-                                       _settings.atticRiseHeight >= _settings.minAtticRiseForWindows &&
-                                       _settings.atticSlopeHorizontalDistance <= _settings.maxAtticHDistForWindows;
+    /// <summary>
+    /// Generates all window segments for a single side of the building.
+    /// </summary>
+    private void GenerateWindowsForSide(int sideIdx, WindowLayerContext mansardContext, WindowLayerContext atticContext)
+    {
+        Vector3 p1_local = _vertexData[sideIdx].position;
+        Vector3 p2_local = _vertexData[(sideIdx + 1) % _vertexData.Count].position;
+        float sideDistance = Vector3.Distance(p1_local, p2_local);
 
-        if (canGenerateAtticWindows)
+        if (sideDistance < GeometryConstants.GeometricEpsilon) return;
+
+        // Calculate segmentation to match the facade segments.
+        int numSegments = CalculateNumSegments(sideDistance);
+        float actualSegmentWidth = CalculateActualSegmentWidth(sideDistance, numSegments);
+
+        // Skip placing windows on the first and last segments of a side to avoid corner crowding.
+        bool skipFirstSegment = numSegments > 1;
+        bool skipLastSegment = numSegments > 1;
+
+        for (int segmentIdx = 0; segmentIdx < numSegments; segmentIdx++)
         {
-            atticWindowsParent = new GameObject("Attic Windows");
-            atticWindowsParent.transform.SetParent(roofWindowsRoot, false);
+            if ((skipFirstSegment && segmentIdx == 0) || (skipLastSegment && segmentIdx == numSegments - 1)) continue;
+
+            // Place windows if the respective layers are enabled.
+            if (mansardContext.canGenerate)
+                PlaceWindowOnSegment(sideIdx, segmentIdx, actualSegmentWidth, mansardContext);
+
+            if (atticContext.canGenerate)
+                PlaceWindowOnSegment(sideIdx, segmentIdx, actualSegmentWidth, atticContext);
         }
-        else if (_settings.placeAtticWindows && _settings.useAtticFloor) // Log if general conditions met but thresholds failed
+    }
+
+    /// <summary>
+    /// Places a single window on a roof segment by raycasting to find the surface.
+    /// </summary>
+    private void PlaceWindowOnSegment(int sideIndex, int segmentIndex, float segmentWidth, WindowLayerContext context)
+    {
+        // Determine correct prefabs to use (default vs. side-specific override).
+        var prefabsToUse = GetPrefabsForSide(sideIndex, context.defaultPrefabs, context.name);
+        if (prefabsToUse == null || prefabsToUse.Count == 0) return;
+
+        // Calculate the ray for this specific window segment.
+        if (!TryCalculateWindowRaycast(sideIndex, segmentIndex, segmentWidth, out Ray ray, out Vector3 facadeNormal_local)) return;
+
+        // Raycast against the roof mesh to find the placement point.
+        var roofCollider = context.roofObject.GetComponent<MeshCollider>();
+        if (roofCollider == null || !roofCollider.Raycast(ray, out RaycastHit hit, 500f)) return;
+
+        // A window was successfully placed, now instantiate it.
+        InstantiateAndPlaceWindow(hit, facadeNormal_local, segmentWidth, sideIndex, segmentIndex, prefabsToUse, context);
+    }
+
+    /// <summary>
+    /// Calculates the world-space ray used to find a window's position on the roof surface.
+    /// </summary>
+    private bool TryCalculateWindowRaycast(int sideIndex, int segmentIndex, float segmentWidth, out Ray ray, out Vector3 facadeNormal_local)
+    {
+        ray = default;
+        Vector3 p1_base_local = _vertexData[sideIndex].position;
+        Vector3 p2_base_local = _vertexData[(sideIndex + 1) % _vertexData.Count].position;
+
+        Vector3 sideDirection_local = (p2_base_local - p1_base_local).normalized;
+        facadeNormal_local = BuildingFootprintUtils.CalculateSideNormal(p1_base_local, p2_base_local, _vertexData);
+
+        // Center point of the segment on the outer wall edge.
+        Vector3 segmentCenter_local = p1_base_local + sideDirection_local * (segmentWidth * (segmentIndex + 0.5f));
+
+        // Shift the origin inwards to be above the sloped roof surface.
+        Vector3 rayOriginHorizontal_local = segmentCenter_local - facadeNormal_local * (_settings.nominalFacadeWidth * 0.5f);
+        Vector3 rayOriginHorizontal_world = _settings.transform.TransformPoint(rayOriginHorizontal_local);
+
+        // Start the raycast from well above the highest possible roof point.
+        float buildingTopY = _settings.transform.position.y + (_settings.middleFloors + 1) * _settings.floorHeight + _settings.mansardRiseHeight + _settings.atticRiseHeight + 10f;
+        Vector3 rayOrigin_world = new Vector3(rayOriginHorizontal_world.x, buildingTopY, rayOriginHorizontal_world.z);
+
+        ray = new Ray(rayOrigin_world, Vector3.down);
+        return true;
+    }
+
+    /// <summary>
+    /// Instantiates and configures a window prefab at the raycast hit location.
+    /// </summary>
+    private void InstantiateAndPlaceWindow(RaycastHit hit, Vector3 facadeNormal_local, float segmentWidth, int sideIndex, int segmentIndex, List<GameObject> prefabs, WindowLayerContext context)
+    {
+        Vector3 facadeNormal_world = _settings.transform.TransformDirection(facadeNormal_local);
+
+        // Apply an inset from the roof surface along the facade's normal.
+        Vector3 windowPosition_world = hit.point - facadeNormal_world * context.windowInset;
+        Quaternion windowRotation_world = Quaternion.LookRotation(facadeNormal_world, hit.normal);
+
+        GameObject prefab = prefabs[Random.Range(0, prefabs.Count)];
+        GameObject instance = Object.Instantiate(prefab, windowPosition_world, windowRotation_world, context.parent);
+        instance.name = $"{context.name}Window_{sideIndex}_{segmentIndex}";
+
+        // Store reference and scale if needed.
+        if (context.name == "Mansard") _elementsStore.allMansardWindows.Add(instance);
+        else if (context.name == "Attic") _elementsStore.allAtticWindows.Add(instance);
+
+        if (_settings.scaleRoofWindowsToFitSegment && _settings.nominalFacadeWidth > GeometryConstants.GeometricEpsilon)
         {
-            if (generatedRoofs.AtticRoofObject == null)
-                Debug.LogWarning("RoofWindowGenerator: Attic windows enabled, but Attic Roof Object is null.");
-            else if (_settings.atticRiseHeight < _settings.minAtticRiseForWindows)
-                Debug.Log($"RoofWindowGenerator: Attic windows skipped. Attic Rise Height ({_settings.atticRiseHeight}) is less than MinRiseForWindows ({_settings.minAtticRiseForWindows}).");
-            else if (_settings.atticSlopeHorizontalDistance < _settings.maxAtticHDistForWindows)
-                Debug.Log($"RoofWindowGenerator: Attic windows skipped. Attic Slope Horizontal Distance ({_settings.atticSlopeHorizontalDistance}) is less than MinHDistForWindows ({_settings.maxAtticHDistForWindows}).");
+            float scaleFactor = segmentWidth / _settings.nominalFacadeWidth;
+            instance.transform.localScale = new Vector3(instance.transform.localScale.x * scaleFactor, instance.transform.localScale.y, instance.transform.localScale.z);
         }
+    }
 
+    /// <summary>
+    /// Selects the correct list of prefabs for a given side, checking for custom style overrides.
+    /// </summary>
+    private List<GameObject> GetPrefabsForSide(int sideIndex, List<GameObject> defaultPrefabs, string roofTypeName)
+    {
+        // Check for a custom style defined on this specific side.
+        bool hasCustomStyle = !_settings.useConsistentStyleForAllSides && sideIndex < _sideData.Count &&
+                              _sideData[sideIndex].useCustomStyle && _sideData[sideIndex].sideStylePreset != null;
 
-        int N = _vertexData.Count;
-
-        for (int sideIdx = 0; sideIdx < N; sideIdx++)
+        if (hasCustomStyle)
         {
-            Vector3 p1_local = _vertexData[sideIdx].position;
-            Vector3 p2_local = _vertexData[(sideIdx + 1) % N].position;
-            float sideDistance = Vector3.Distance(p1_local, p2_local);
-
-            if (sideDistance < GeometryConstants.GeometricEpsilon) continue;
-
-            int numSegments = CalculateNumSegments(sideDistance);
-            float actualSegmentWidth = CalculateActualSegmentWidth(sideDistance, numSegments);
-
-            bool skipFirstSegment = true;
-            bool skipLastSegment = true;
-
-            if (numSegments <= 1)
-            {
-                skipFirstSegment = false;
-                skipLastSegment = false;
-            }
-
-            for (int segmentIdx = 0; segmentIdx < numSegments; segmentIdx++)
-            {
-                if (skipFirstSegment && segmentIdx == 0) continue;
-                if (skipLastSegment && segmentIdx == numSegments - 1) continue;
-
-                if (canGenerateMansardWindows) // Use the pre-calculated boolean
-                {
-                    PlaceWindowsOnSpecificRoof(
-                        "Mansard",
-                        generatedRoofs.MansardRoofObject,
-                        sideIdx, segmentIdx, numSegments, actualSegmentWidth,
-                        mansardWindowsParent.transform,
-                        _settings.mansardSlopeHorizontalDistance,
-                        _settings.mansardWindowInset
-                    );
-                }
-
-                if (canGenerateAtticWindows) // Use the pre-calculated boolean
-                {
-                    PlaceWindowsOnSpecificRoof(
-                        "Attic",
-                        generatedRoofs.AtticRoofObject,
-                        sideIdx, segmentIdx, numSegments, actualSegmentWidth,
-                        atticWindowsParent.transform,
-                        _settings.atticSlopeHorizontalDistance,
-                        _settings.atticWindowInset
-                    );
-                }
-            }
+            var customStyle = _sideData[sideIndex].sideStylePreset;
+            if (roofTypeName == "Mansard" && customStyle.mansardFloorPrefabs?.Count > 0)
+                return customStyle.mansardFloorPrefabs;
+            if (roofTypeName == "Attic" && customStyle.atticFloorPrefabs?.Count > 0)
+                return customStyle.atticFloorPrefabs;
         }
+
+        // Fallback to the default style.
+        return defaultPrefabs;
     }
 
     private int CalculateNumSegments(float sideDistance)
     {
-        if (_settings.nominalFacadeWidth <= GeometryConstants.GeometricEpsilon)
-            return Mathf.Max(1, _settings.minSideLengthUnits > 0 ? _settings.minSideLengthUnits : 1);
-
-        int num = (_settings.scaleFacadesToFitSide)
-            ? Mathf.Max(_settings.minSideLengthUnits > 0 ? _settings.minSideLengthUnits : 1, Mathf.RoundToInt(sideDistance / _settings.nominalFacadeWidth))
-            : Mathf.Max(_settings.minSideLengthUnits > 0 ? _settings.minSideLengthUnits : 1, Mathf.FloorToInt(sideDistance / _settings.nominalFacadeWidth));
-        return Mathf.Max(1, num);
+        if (_settings.nominalFacadeWidth <= GeometryConstants.GeometricEpsilon) return 1;
+        int minSegments = Mathf.Max(1, _settings.minSideLengthUnits);
+        int num = _settings.scaleFacadesToFitSide
+            ? Mathf.RoundToInt(sideDistance / _settings.nominalFacadeWidth)
+            : Mathf.FloorToInt(sideDistance / _settings.nominalFacadeWidth);
+        return Mathf.Max(minSegments, num);
     }
 
     private float CalculateActualSegmentWidth(float sideDistance, int numSegments)
@@ -143,107 +222,24 @@ public class RoofWindowGenerator
         return _settings.scaleFacadesToFitSide ? (sideDistance / numSegments) : _settings.nominalFacadeWidth;
     }
 
-    private void PlaceWindowsOnSpecificRoof(
-        string roofTypeName,
-        GameObject roofObject,
-        int sideIndex,
-        int segmentIndexInSide,
-        int totalSegmentsOnSide,
-        float actualSegmentWidth,
-        Transform windowsParent,
-        float roofSlopeHorizontalDistance,
-        float currentRoofWindowInset)
+    // Helper struct to pass context for a window layer.
+    private class WindowLayerContext
     {
-        // MeshFilter and MeshCollider checks already in place from previous version
-        MeshCollider roofCollider = roofObject.GetComponent<MeshCollider>();
-        if (roofCollider == null)
+        public string name;
+        public bool canGenerate;
+        public GameObject roofObject;
+        public Transform parent;
+        public float windowInset;
+        public List<GameObject> defaultPrefabs;
+
+        public WindowLayerContext(string name, GameObject roofObject, float inset, List<GameObject> defaultPrefabs)
         {
-            Debug.LogError($"{roofTypeName} GameObject for side {sideIndex} does not have a MeshCollider. Cannot place windows via raycast.");
-            return;
-        }
-
-        List<GameObject> windowPrefabsToUse = null;
-        if (roofTypeName == "Mansard") windowPrefabsToUse = _buildingStyle.defaultMansardWindowPrefabs;
-        else if (roofTypeName == "Attic") windowPrefabsToUse = _buildingStyle.defaultAtticWindowPrefabs;
-
-        if (sideIndex < _sideData.Count && _sideData[sideIndex].useCustomStyle && _sideData[sideIndex].sideStylePreset != null)
-        {
-            SideStyleSO customStyle = _sideData[sideIndex].sideStylePreset;
-            List<GameObject> customPrefabs = null;
-            if (roofTypeName == "Mansard" && customStyle.mansardFloorPrefabs != null && customStyle.mansardFloorPrefabs.Count > 0)
-                customPrefabs = customStyle.mansardFloorPrefabs;
-            else if (roofTypeName == "Attic" && customStyle.atticFloorPrefabs != null && customStyle.atticFloorPrefabs.Count > 0)
-                customPrefabs = customStyle.atticFloorPrefabs;
-
-            if (customPrefabs != null) windowPrefabsToUse = customPrefabs;
-        }
-
-        if (windowPrefabsToUse == null || windowPrefabsToUse.Count == 0) return;
-
-
-        int N = _vertexData.Count;
-        Vector3 p1_base_local = _vertexData[sideIndex].position;
-        Vector3 p2_base_local = _vertexData[(sideIndex + 1) % N].position;
-
-        Vector3 sideVector_local = p2_base_local - p1_base_local;
-        Vector3 sideDirection_local = sideVector_local.normalized;
-        Vector3 facadeNormal_local = BuildingFootprintUtils.CalculateSideNormal(p1_base_local, p2_base_local, _vertexData);
-
-        Vector3 segmentOuterEdgeHorizontalCenter_local = p1_base_local + sideDirection_local * (actualSegmentWidth * (segmentIndexInSide + 0.5f));
-        float desiredInwardHorizontalShift = roofSlopeHorizontalDistance * 0.5f;
-        Vector3 windowRaycastOriginHorizontal_local = segmentOuterEdgeHorizontalCenter_local - facadeNormal_local * desiredInwardHorizontalShift;
-        Vector3 horizontalPositionForRaycast_world = _settings.transform.TransformPoint(windowRaycastOriginHorizontal_local);
-
-        float buildingBaseY_world = _settings.transform.position.y;
-        float totalWallHeight_local = (_settings.middleFloors + 1) * _settings.floorHeight;
-        float estimatedMaxRoofRise_local = 0;
-        if (_settings.useMansardFloor) estimatedMaxRoofRise_local += _settings.mansardRiseHeight;
-        if (_settings.useAtticFloor) estimatedMaxRoofRise_local += _settings.atticRiseHeight;
-        float raycastOriginY_world = buildingBaseY_world + totalWallHeight_local + estimatedMaxRoofRise_local;
-
-        Vector3 raycastOrigin_world = new Vector3(
-            horizontalPositionForRaycast_world.x,
-            raycastOriginY_world,
-            horizontalPositionForRaycast_world.z
-        );
-
-        Ray ray = new Ray(raycastOrigin_world, Vector3.down);
-        RaycastHit hit;
-        float raycastDistance = raycastOriginY_world - (buildingBaseY_world - 1f);
-
-        if (!roofCollider.Raycast(ray, out hit, raycastDistance))
-        {
-            return;
-        }
-
-        Vector3 windowAnchorPos_world = hit.point;
-        Vector3 roofSurfaceNormal_world = hit.normal;
-        Vector3 facadeNormal_world = _settings.transform.TransformDirection(facadeNormal_local);
-
-        // --- MODIFIED INSET LOGIC ---
-        // Inset along the facade's normal (window's Z-axis), effectively pushing it "horizontally" into the building.
-        // A positive roofWindowInset pushes the window inwards from its raycasted position.
-        Vector3 windowPosition_world = windowAnchorPos_world - facadeNormal_world * currentRoofWindowInset;
-
-        Quaternion windowRotation_world = Quaternion.LookRotation(facadeNormal_world, roofSurfaceNormal_world);
-
-        GameObject prefab = windowPrefabsToUse[Random.Range(0, windowPrefabsToUse.Count)];
-        if (prefab != null)
-        {
-            GameObject instance = Object.Instantiate(prefab, windowsParent);
-            instance.transform.position = windowPosition_world;
-            instance.transform.rotation = windowRotation_world;
-
-            if (roofTypeName == "Mansard") _elementsStore.allMansardWindows.Add(instance);
-            else if (roofTypeName == "Attic") _elementsStore.allAtticWindows.Add(instance);
-
-            if (_settings.scaleRoofWindowsToFitSegment && _settings.nominalFacadeWidth > GeometryConstants.GeometricEpsilon && actualSegmentWidth > GeometryConstants.GeometricEpsilon)
-            {
-                Vector3 localScale = instance.transform.localScale;
-                float scaleFactor = actualSegmentWidth / _settings.nominalFacadeWidth;
-                instance.transform.localScale = new Vector3(localScale.x * scaleFactor, localScale.y, localScale.z);
-            }
-            instance.name = $"{roofTypeName}Window_{sideIndex}_{segmentIndexInSide}";
+            this.name = name;
+            this.roofObject = roofObject;
+            this.windowInset = inset;
+            this.defaultPrefabs = defaultPrefabs;
+            this.canGenerate = false;
+            this.parent = null;
         }
     }
 }

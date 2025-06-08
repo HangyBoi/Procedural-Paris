@@ -241,45 +241,66 @@ public class PolygonBuildingGenerator : MonoBehaviour
         _currentBuildingElements?.ClearReferences();
     }
 
+    /// <summary>
+    /// Ensures the 'sideData' list matches the number of vertices, adding or removing entries as needed.
+    /// </summary>
     public void SynchronizeSideData()
     {
         vertexData ??= new List<PolygonVertexData>();
         sideData ??= new List<PolygonSideData>();
+
         int requiredCount = vertexData.Count;
-        while (sideData.Count < requiredCount) sideData.Add(new PolygonSideData());
-        while (sideData.Count > requiredCount && sideData.Count > 0) sideData.RemoveAt(sideData.Count - 1);
+        while (sideData.Count < requiredCount)
+            sideData.Add(new PolygonSideData());
+        while (sideData.Count > requiredCount && sideData.Count > 0)
+            sideData.RemoveAt(sideData.Count - 1);
     }
 
+    /// <summary>
+    /// Snaps a vertex position to a grid defined by 'vertexSnapSize'.
+    /// </summary>
     public Vector3 SnapVertexPosition(Vector3 vertexPos)
     {
-        if (vertexSnapSize <= 1e-6f) return new Vector3(vertexPos.x, 0f, vertexPos.z);
+        if (vertexSnapSize <= GeometryConstants.GeometricEpsilon) return new Vector3(vertexPos.x, 0f, vertexPos.z);
+
         return new Vector3(
             Mathf.Round(vertexPos.x / vertexSnapSize) * vertexSnapSize,
-            0f,
+            0f, // Ensure Y is always 0 for the 2D footprint.
             Mathf.Round(vertexPos.z / vertexSnapSize) * vertexSnapSize
         );
     }
 
+    /// <summary>
+    /// Safely destroys a GameObject, handling both Editor and Play mode.
+    /// </summary>
     private static void SafeDestroy(GameObject obj)
     {
         if (obj == null) return;
+
         if (Application.isEditor && !Application.isPlaying)
             DestroyImmediate(obj);
         else
             Destroy(obj);
     }
 
-    void OnValidate()
+    /// <summary>
+    /// Called in the editor when a script variable is changed. Enforces constraints on values.
+    /// </summary>
+    private void OnValidate()
     {
         SynchronizeSideData();
+
+        // Clamp numerical settings to sensible minimums.
         middleFloors = Mathf.Max(0, middleFloors);
         floorHeight = Mathf.Max(0.1f, floorHeight);
         nominalFacadeWidth = Mathf.Max(0.1f, nominalFacadeWidth);
         minSideLengthUnits = Mathf.Max(0, minSideLengthUnits);
+
         mansardSlopeHorizontalDistance = Mathf.Max(0, mansardSlopeHorizontalDistance);
         mansardRiseHeight = Mathf.Max(0, mansardRiseHeight);
         atticSlopeHorizontalDistance = Mathf.Max(0, atticSlopeHorizontalDistance);
         atticRiseHeight = Mathf.Max(0, atticRiseHeight);
+
         minMansardRiseForWindows = Mathf.Max(0f, minMansardRiseForWindows);
         maxMansardHDistForWindows = Mathf.Max(0f, maxMansardHDistForWindows);
         minAtticRiseForWindows = Mathf.Max(0f, minAtticRiseForWindows);
