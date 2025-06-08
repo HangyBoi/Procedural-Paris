@@ -1,224 +1,210 @@
+// @Nichita Cebotari
+// *Explanatory Comments and Headers were written with help of AI*
+// *General Review, Formatting, Optimization and Code Cleanup were done by AI*
+//
+//  This script manages building instances, allowing customization of building elements at runtime or in the editor.
+//
+
 #if UNITY_EDITOR
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
+/// <summary>
+/// Custom editor for BuildingInstanceDataManager. Allows post-generation customization of building instances.
+/// </summary>
 [CustomEditor(typeof(BuildingInstanceDataManager))]
 public class BuildingInstanceDataManagerEditor : Editor
 {
     private BuildingInstanceDataManager _script;
 
-    private int _selectedSideIndexForStyle = 0;
-    private SideStyleSO _newSideStyle;
+    // UI state variables
+    private int _sideStyleIndex;
+    private SideStyleSO _sideStyle;
+    private int _matSideIndex;
+    private int _matSegmentTypeIndex;
+    private Material _facadeMaterial;
+    private int _materialSlot;
+    private Material _mansardMat, _atticMat, _flatMat;
 
-    private bool _cornerBodiesActive = true;
-    private bool _cornerCapsActive = true;
+    // State for collapsible foldout sections
+    private static bool _showFacadeStyle = true;
+    private static bool _showVisibility = true;
+    private static bool _showMaterials = true;
 
-    private bool _mansardWindowsActive = true;
-    private bool _atticWindowsActive = true;
-
-    private int _selectedSideIndexForMaterial = 0;
-    private string[] _segmentTypes = { "Ground", "Middle" };
-    private int _selectedSegmentTypeIndex = 0;
-    private Material _newFacadeMaterial;
-    private int _materialSlot = 0;
-
-    private Material _newMansardMaterial;
-    private Material _newAtticMaterial;
-    private Material _newFlatMaterial;
-
-
-    private void OnEnable()
-    {
-        _script = (BuildingInstanceDataManager)target;
-
-        if (_script.elements.allMansardWindows != null && _script.elements.allMansardWindows.Count > 0 && _script.elements.allMansardWindows[0] != null)
-            _mansardWindowsActive = _script.elements.allMansardWindows[0].activeSelf;
-        if (_script.elements.allAtticWindows != null && _script.elements.allAtticWindows.Count > 0 && _script.elements.allAtticWindows[0] != null)
-            _atticWindowsActive = _script.elements.allAtticWindows[0].activeSelf;
-
-        if (_script.elements.allCornerBodies != null && _script.elements.allCornerBodies.Count > 0 && _script.elements.allCornerBodies[0] != null)
-            _cornerBodiesActive = _script.elements.allCornerBodies[0].activeSelf;
-        if (_script.elements.allCornerCaps != null && _script.elements.allCornerCaps.Count > 0 && _script.elements.allCornerCaps[0] != null)
-            _cornerCapsActive = _script.elements.allCornerCaps[0].activeSelf;
-    }
-
+    /// <summary>
+    /// Draws the inspector GUI for post-generation building customization.
+    /// </summary>
     public override void OnInspectorGUI()
     {
         _script = (BuildingInstanceDataManager)target;
-        if (_script.elements.buildingRoot == null)
+        // Ensure the building data is fully initialized before drawing the custom UI
+        if (_script.elements.buildingRoot == null || _script.sourceGenerator == null)
         {
-            EditorGUILayout.HelpBox("Building data not fully initialized. Regenerate the building.", MessageType.Warning);
+            EditorGUILayout.HelpBox("Building data not initialized. Regenerate the building.", MessageType.Warning);
             return;
         }
 
         serializedObject.Update();
-        Undo.RecordObject(_script, "Building Instance Data Change");
-
 
         EditorGUILayout.LabelField("Post-Generation Customization", EditorStyles.boldLabel);
-        EditorGUILayout.HelpBox("These changes modify the current instance without full regeneration. For structural changes, use the PolygonBuildingGenerator.", MessageType.Info);
+        EditorGUILayout.HelpBox("Modify this instance without full regeneration.", MessageType.Info);
 
-        EditorGUILayout.Space();
+        // Draw collapsible sections for organization
+        _showFacadeStyle = EditorGUILayout.Foldout(_showFacadeStyle, "Facade Style Override", true, EditorStyles.foldoutHeader);
+        if (_showFacadeStyle) DrawSideStyleSection();
 
-        // --- 1. Facade Style Per Side ---
-        EditorGUILayout.LabelField("Facade Style Per Side", EditorStyles.boldLabel);
-        int numSides = _script.sourceGenerator.vertexData.Count; // Use sourceGenerator for vertex count
-        if (numSides > 0)
-        {
-            _selectedSideIndexForStyle = EditorGUILayout.IntSlider("Side Index", _selectedSideIndexForStyle, 0, numSides - 1);
-            _newSideStyle = (SideStyleSO)EditorGUILayout.ObjectField("New Side Style", _newSideStyle, typeof(SideStyleSO), false);
-            if (GUILayout.Button("Apply Style to Side " + _selectedSideIndexForStyle) && _newSideStyle != null)
-            {
-                Undo.RegisterFullObjectHierarchyUndo(_script.gameObject, "Apply Side Style");
-                _script.ApplySideStyle(_selectedSideIndexForStyle, _newSideStyle);
-                EditorUtility.SetDirty(_script);
-            }
-        }
-        else
-        {
-            EditorGUILayout.HelpBox("No sides defined in source generator.", MessageType.Info);
-        }
+        _showVisibility = EditorGUILayout.Foldout(_showVisibility, "Element Visibility", true, EditorStyles.foldoutHeader);
+        if (_showVisibility) DrawVisibilitySection();
 
-        EditorGUILayout.Space();
-
-        // --- 2. Corner Elements Visibility ---
-        EditorGUILayout.LabelField("Corner Elements Visibility", EditorStyles.boldLabel);
-        bool prevCornerBodiesActive = _cornerBodiesActive;
-        _cornerBodiesActive = EditorGUILayout.Toggle("Corner Bodies Active", _cornerBodiesActive);
-        if (prevCornerBodiesActive != _cornerBodiesActive)
-        {
-            // Record Undo for all affected corner bodies
-            if (_script.elements.allCornerBodies != null)
-            {
-                foreach (var body in _script.elements.allCornerBodies) if (body != null) Undo.RecordObject(body, "Toggle Corner Bodies");
-            }
-            _script.SetAllCornerBodiesActive(_cornerBodiesActive);
-            EditorUtility.SetDirty(_script); // Mark for save
-        }
-
-        bool prevCornerCapsActive = _cornerCapsActive;
-        _cornerCapsActive = EditorGUILayout.Toggle("Corner Caps Active", _cornerCapsActive);
-        if (prevCornerCapsActive != _cornerCapsActive)
-        {
-            // Record Undo for all affected corner caps
-            if (_script.elements.allCornerCaps != null)
-            {
-                foreach (var cap in _script.elements.allCornerCaps) if (cap != null) Undo.RecordObject(cap, "Toggle Corner Caps");
-            }
-            _script.SetAllCornerCapsActive(_cornerCapsActive);
-            EditorUtility.SetDirty(_script); // Mark for save
-        }
-
-        EditorGUILayout.Space();
-
-        // --- 3. Roof Windows Visibility ---
-        EditorGUILayout.LabelField("Roof Windows Visibility", EditorStyles.boldLabel);
-        bool prevMansardActive = _mansardWindowsActive;
-        _mansardWindowsActive = EditorGUILayout.Toggle("Mansard Windows Active", _mansardWindowsActive);
-        if (prevMansardActive != _mansardWindowsActive)
-        {
-            if (_script.elements.allMansardWindows != null)
-            {
-                foreach (var window in _script.elements.allMansardWindows) if (window != null) Undo.RecordObject(window, "Toggle Mansard Windows");
-            }
-            _script.SetAllWindowsActive("Mansard", _mansardWindowsActive);
-            EditorUtility.SetDirty(_script);
-        }
-
-        bool prevAtticActive = _atticWindowsActive;
-        _atticWindowsActive = EditorGUILayout.Toggle("Attic Windows Active", _atticWindowsActive);
-        if (prevAtticActive != _atticWindowsActive)
-        {
-            if (_script.elements.allAtticWindows != null)
-            {
-                foreach (var window in _script.elements.allAtticWindows) if (window != null) Undo.RecordObject(window, "Toggle Attic Windows");
-            }
-            _script.SetAllWindowsActive("Attic", _atticWindowsActive);
-            EditorUtility.SetDirty(_script);
-        }
-
-        EditorGUILayout.Space();
-
-        // --- 4. Facade Materials per side segment ---
-        EditorGUILayout.LabelField("Facade Material Per Side Segment Type", EditorStyles.boldLabel);
-        if (numSides > 0)
-        {
-            _selectedSideIndexForMaterial = EditorGUILayout.IntSlider("Side Index", _selectedSideIndexForMaterial, 0, numSides - 1);
-            _selectedSegmentTypeIndex = EditorGUILayout.Popup("Segment Type", _selectedSegmentTypeIndex, _segmentTypes);
-            _newFacadeMaterial = (Material)EditorGUILayout.ObjectField("New Material", _newFacadeMaterial, typeof(Material), false);
-            _materialSlot = EditorGUILayout.IntField("Material Slot Index", _materialSlot);
-            _materialSlot = Mathf.Max(0, _materialSlot); // Ensure non-negative
-
-            if (GUILayout.Button($"Apply Material to Side {_selectedSideIndexForMaterial} {_segmentTypes[_selectedSegmentTypeIndex]} Segments") && _newFacadeMaterial != null)
-            {
-                // Record changes for all affected renderers
-                SideElementGroup sideGroup = _script.elements.facadeElementsPerSide.Find(sg => sg.sideIndex == _selectedSideIndexForMaterial);
-                if (sideGroup != null)
-                {
-                    List<GameObject> segmentsToChange = null;
-                    if (_segmentTypes[_selectedSegmentTypeIndex].Equals("Ground", System.StringComparison.OrdinalIgnoreCase))
-                        segmentsToChange = sideGroup.groundFacadeSegments;
-                    else if (_segmentTypes[_selectedSegmentTypeIndex].Equals("Middle", System.StringComparison.OrdinalIgnoreCase))
-                        segmentsToChange = sideGroup.middleFacadeSegments;
-
-                    if (segmentsToChange != null)
-                    {
-                        foreach (var seg in segmentsToChange)
-                        {
-                            if (seg != null)
-                            {
-                                Renderer[] renderers = seg.GetComponentsInChildren<Renderer>();
-                                Undo.RecordObjects(renderers, "Change Facade Material");
-                            }
-                        }
-                    }
-                }
-                _script.ChangeFacadeMaterial(_selectedSideIndexForMaterial, _segmentTypes[_selectedSegmentTypeIndex], _newFacadeMaterial, _materialSlot);
-                EditorUtility.SetDirty(_script);
-            }
-        }
-
-        EditorGUILayout.Space();
-
-        // --- 5. Roof Materials override ---
-        EditorGUILayout.LabelField("Roof Materials Override", EditorStyles.boldLabel);
-        _newMansardMaterial = (Material)EditorGUILayout.ObjectField("Mansard Roof Material", _newMansardMaterial, typeof(Material), false);
-        if (GUILayout.Button("Apply Mansard Material") && _newMansardMaterial != null && _script.elements.mansardRoofMeshObject != null)
-        {
-            Undo.RecordObject(_script.elements.mansardRoofMeshObject.GetComponent<Renderer>(), "Change Mansard Material");
-            _script.SetRoofMaterial("Mansard", _newMansardMaterial);
-            EditorUtility.SetDirty(_script);
-        }
-
-        _newAtticMaterial = (Material)EditorGUILayout.ObjectField("Attic Roof Material", _newAtticMaterial, typeof(Material), false);
-        if (GUILayout.Button("Apply Attic Material") && _newAtticMaterial != null && _script.elements.atticRoofMeshObject != null)
-        {
-            Undo.RecordObject(_script.elements.atticRoofMeshObject.GetComponent<Renderer>(), "Change Attic Material");
-            _script.SetRoofMaterial("Attic", _newAtticMaterial);
-            EditorUtility.SetDirty(_script);
-        }
-
-        _newFlatMaterial = (Material)EditorGUILayout.ObjectField("Flat Roof Material", _newFlatMaterial, typeof(Material), false);
-        if (GUILayout.Button("Apply Flat Material") && _newFlatMaterial != null && _script.elements.flatRoofMeshObject != null)
-        {
-            Undo.RecordObject(_script.elements.flatRoofMeshObject.GetComponent<Renderer>(), "Change Flat Roof Material");
-            _script.SetRoofMaterial("Flat", _newFlatMaterial);
-            EditorUtility.SetDirty(_script);
-        }
+        _showMaterials = EditorGUILayout.Foldout(_showMaterials, "Material Overrides", true, EditorStyles.foldoutHeader);
+        if (_showMaterials) DrawMaterialSection();
 
         EditorGUILayout.Space(20);
-        if (GUILayout.Button("REGENERATE FULL BUILDING"))
+        // Button to trigger a full regeneration from the source generator
+        if (GUILayout.Button("REGENERATE FULL BUILDING", GUILayout.Height(30)))
         {
-            Undo.RecordObject(_script.sourceGenerator.gameObject, "Regenerate Full Building"); // Record the generator's GO for Undo
+            Undo.RecordObject(_script.sourceGenerator.gameObject, "Regenerate Full Building");
             _script.sourceGenerator.GenerateBuilding();
-
+            // Exit GUI to prevent layout errors after a significant hierarchy change
             GUIUtility.ExitGUI();
         }
 
-        if (GUI.changed)
+        serializedObject.ApplyModifiedProperties();
+    }
+
+    /// <summary>
+    /// Draws the section for applying a style override to a specific building side.
+    /// </summary>
+    private void DrawSideStyleSection()
+    {
+        EditorGUILayout.BeginVertical("box");
+        int numSides = _script.sourceGenerator.vertexData.Count;
+        if (numSides > 0)
         {
-            EditorUtility.SetDirty(_script);
+            _sideStyleIndex = EditorGUILayout.IntSlider("Side Index", _sideStyleIndex, 0, numSides - 1);
+            _sideStyle = (SideStyleSO)EditorGUILayout.ObjectField("New Side Style", _sideStyle, typeof(SideStyleSO), false);
+
+            if (GUILayout.Button($"Apply Style to Side {_sideStyleIndex}") && _sideStyle != null)
+            {
+                // Applying a style can instantiate/destroy many objects, so a full hierarchy undo is required.
+                Undo.RegisterFullObjectHierarchyUndo(_script.gameObject, "Apply Side Style");
+                _script.ApplySideStyle(_sideStyleIndex, _sideStyle);
+            }
+        }
+        EditorGUILayout.EndVertical();
+    }
+
+    /// <summary>
+    /// Draws the section for toggling the visibility of major building element groups.
+    /// </summary>
+    private void DrawVisibilitySection()
+    {
+        EditorGUILayout.BeginVertical("box");
+        DrawVisibilityToggle("Corner Bodies", _script.elements.allCornerBodies, active => _script.SetAllCornerBodiesActive(active));
+        DrawVisibilityToggle("Corner Caps", _script.elements.allCornerCaps, active => _script.SetAllCornerCapsActive(active));
+        EditorGUILayout.Space();
+        DrawVisibilityToggle("Mansard Windows", _script.elements.allMansardWindows, active => _script.SetAllWindowsActive("Mansard", active));
+        DrawVisibilityToggle("Attic Windows", _script.elements.allAtticWindows, active => _script.SetAllWindowsActive("Attic", active));
+        EditorGUILayout.EndVertical();
+    }
+
+    /// <summary>
+    /// Generic helper to draw a visibility toggle for a list of GameObjects.
+    /// </summary>
+    private void DrawVisibilityToggle(string label, List<GameObject> targets, System.Action<bool> setter)
+    {
+        // Disable the toggle if the target list is invalid or empty.
+        if (targets == null || targets.Count == 0 || targets[0] == null)
+        {
+            EditorGUI.BeginDisabledGroup(true);
+            EditorGUILayout.Toggle(label, false);
+            EditorGUI.EndDisabledGroup();
+            return;
+        }
+
+        // Use the active state of the first element as representative for the whole group.
+        bool initialValue = targets[0].activeSelf;
+        bool newValue = EditorGUILayout.Toggle(label, initialValue);
+
+        if (newValue != initialValue)
+        {
+            // Record each object in the group for a proper Undo operation.
+            foreach (var go in targets)
+                if (go != null) Undo.RecordObject(go, $"Toggle {label}");
+            setter(newValue);
+        }
+    }
+
+    /// <summary>
+    /// Draws the section for overriding facade and roof materials.
+    /// </summary>
+    private void DrawMaterialSection()
+    {
+        EditorGUILayout.BeginVertical("box");
+
+        // --- Facade Materials ---
+        EditorGUILayout.LabelField("Facade Material per Side", EditorStyles.boldLabel);
+        int numSides = _script.sourceGenerator.vertexData.Count;
+        string[] segmentTypes = { "Ground", "Middle" };
+
+        if (numSides > 0)
+        {
+            _matSideIndex = EditorGUILayout.IntSlider("Side Index", _matSideIndex, 0, numSides - 1);
+            _matSegmentTypeIndex = EditorGUILayout.Popup("Segment Type", _matSegmentTypeIndex, segmentTypes);
+            _facadeMaterial = (Material)EditorGUILayout.ObjectField("New Material", _facadeMaterial, typeof(Material), false);
+            _materialSlot = Mathf.Max(0, EditorGUILayout.IntField("Material Slot Index", _materialSlot));
+
+            if (GUILayout.Button("Apply Facade Material") && _facadeMaterial != null)
+            {
+                RecordFacadeRenderersForUndo(_matSideIndex, segmentTypes[_matSegmentTypeIndex]);
+                _script.ChangeFacadeMaterial(_matSideIndex, segmentTypes[_matSegmentTypeIndex], _facadeMaterial, _materialSlot);
+            }
+        }
+
+        EditorGUILayout.Space();
+
+        // --- Roof Materials ---
+        EditorGUILayout.LabelField("Roof Materials", EditorStyles.boldLabel);
+        DrawMaterialChanger("Mansard", ref _mansardMat, _script.elements.mansardRoofMeshObject);
+        DrawMaterialChanger("Attic", ref _atticMat, _script.elements.atticRoofMeshObject);
+        DrawMaterialChanger("Flat", ref _flatMat, _script.elements.flatRoofMeshObject);
+
+        EditorGUILayout.EndVertical();
+    }
+
+    /// <summary>
+    /// Generic helper to draw a material field and apply button for a given element.
+    /// </summary>
+    private void DrawMaterialChanger(string name, ref Material material, GameObject targetObject)
+    {
+        material = (Material)EditorGUILayout.ObjectField($"{name} Roof Material", material, typeof(Material), false);
+
+        // Disable the button if no material is assigned or the target object doesn't exist.
+        EditorGUI.BeginDisabledGroup(material == null || targetObject == null);
+        if (GUILayout.Button($"Apply {name} Material"))
+        {
+            Undo.RecordObject(targetObject.GetComponent<Renderer>(), $"Change {name} Material");
+            _script.SetRoofMaterial(name, material);
+        }
+        EditorGUI.EndDisabledGroup();
+    }
+
+    /// <summary>
+    /// Records all renderers on a facade side for undo before a material change is applied.
+    /// </summary>
+    private void RecordFacadeRenderersForUndo(int sideIndex, string segmentType)
+    {
+        SideElementGroup sideGroup = _script.elements.facadeElementsPerSide[sideIndex];
+        List<GameObject> segments = segmentType == "Ground" ? sideGroup.groundFacadeSegments : sideGroup.middleFacadeSegments;
+
+        if (segments != null)
+        {
+            foreach (var seg in segments)
+            {
+                // Must record all renderers on the segment and its children for Undo to work correctly.
+                if (seg != null) Undo.RecordObjects(seg.GetComponentsInChildren<Renderer>(), "Change Facade Material");
+            }
         }
     }
 }

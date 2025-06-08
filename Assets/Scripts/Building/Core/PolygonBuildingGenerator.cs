@@ -1,8 +1,8 @@
 // @Nichita Cebotari
 // *Explanatory Comments and Headers were written with help of AI*
-// *General Review, Formatting, and Code Cleanup were done by AI*
+// *General Review, Formatting, Optimization and Code Cleanup were done by AI*
 //
-// This code is part of a Unity project that generates procedural buildings based on user-defined polygon footprints and style settings.
+// This script generates procedural buildings based on user-defined polygon footprints and style settings.
 //
 
 using System.Collections.Generic;

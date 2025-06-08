@@ -1,3 +1,12 @@
+// @Nichita Cebotari
+// *Explanatory Comments and Headers were written with help of AI*
+// *General Review, Formatting, Optimization and Code Cleanup were done by AI*
+//
+//  This script provides utility methods for 2D polygon and geometric calculations, primarily using Vector2.
+//  It also includes methods for calculating circumcenters, ordering vertices, offsetting polygons, and validating plot geometry.
+//  The code is designed to work with Unity's Vector2 and MIConvexHull types.
+//
+
 using UnityEngine;
 using System.Collections.Generic;
 using MIConvexHull;

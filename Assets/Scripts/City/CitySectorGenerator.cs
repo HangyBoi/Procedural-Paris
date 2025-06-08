@@ -1,8 +1,20 @@
+// @Nichita Cebotari
+// *Explanatory Comments and Headers were written with help of AI*
+// *General Review, Formatting, Optimization and Code Cleanup were done by AI*
+//
+//  This script generates a city sector by creating Voronoi diagrams to define building plots,
+//  then populates those plots with procedurally generated buildings.
+//
+
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 using MIConvexHull;
 
+/// <summary>
+/// Generates a city sector by creating Voronoi diagrams to define building plots,
+/// then populates those plots with procedurally generated buildings.
+/// </summary>
 public class CitySectorGenerator : MonoBehaviour
 {
     [Header("Prefabs & Styles")]
@@ -17,448 +29,308 @@ public class CitySectorGenerator : MonoBehaviour
     public float voronoiBoundsPadding = 50f;
     public float plotVertexSnapSize = 0.0f;
 
-    [Header("Plot Validation Parameters")]
+    [Header("Plot Validation")]
     public float minPlotSideLength = 5.0f;
     public float minPlotAngleDegrees = 15.0f;
     public float minPlotArea = 25.0f;
 
-    [Header("Plot Styling Parameters")]
+    [Header("Plot Styling")]
     public Material pavementMaterial;
     public float buildingInsetFromPavementEdge = 0.5f;
 
     [Header("Building Style Variation")]
-    [Range(0f, 1f)]
-    public float chanceForVariedSides = 0.1f;
+    [Range(0f, 1f)] public float chanceForVariedSides = 0.1f;
     public List<SideStyleSO> availableSideStylesForVariation;
-    [Range(0f, 1f)]
-    public float chancePerVertexForCorner = 0.7f; // Chance for each vertex to have a corner element
+    [Range(0f, 1f)] public float chancePerVertexForCorner = 0.7f;
 
     [Header("Building Structure Randomization")]
     public int minFloors = 2;
     public int maxFloors = 7;
-    [Range(0f, 1f)]
-    public float chanceForAtticFloor = 0.5f;
+    [Range(0f, 1f)] public float chanceForAtticFloor = 0.5f;
 
-    [Header("Building Roof Randomization Ranges")]
-    public Vector2 randomMansardHDistRange = new Vector2(1.0f, 2.5f);
-    public Vector2 randomMansardRiseRange = new Vector2(1.5f, 3.0f);
-    public Vector2 randomAtticHDistRange = new Vector2(1.0f, 2.0f);
-    public Vector2 randomAtticRiseRange = new Vector2(1.0f, 2.5f);
+    [Header("Building Roof Randomization")]
+    public Vector2 randomMansardHDistRange = new(1.0f, 2.5f);
+    public Vector2 randomMansardRiseRange = new(1.5f, 3.0f);
+    public Vector2 randomAtticHDistRange = new(1.0f, 2.0f);
+    public Vector2 randomAtticRiseRange = new(1.0f, 2.5f);
 
+    [Header("Debug")]
+    [Tooltip("Show gizmos in the Scene view for visualizing the generation process.")]
+    public bool showDebugGizmos = true;
 
     [Header("Generator Output")]
-    [SerializeField]
-    private CitySectorData _generatedData = new CitySectorData();
+    [SerializeField] private CitySectorData _generatedData = new CitySectorData();
     public CitySectorData GeneratedData => _generatedData;
 
     private const string GENERATED_SECTOR_ROOT_NAME = "GeneratedSectorContent";
 
-    void Start()
-    {
-        // GenerateFullSector();
-    }
-
+    /// <summary>
+    /// Clears any existing sector content and generates a new city sector based on current parameters.
+    /// </summary>
     public void GenerateFullSector()
     {
         ClearGeneratedSector();
-
-        if (buildingGeneratorPrefab == null)
-        {
-            Debug.LogError("Building Generator Prefab is not assigned!", this);
-            return;
-        }
-
-        if (buildingGeneratorPrefab.GetComponent<PolygonBuildingGenerator>() == null)
-        {
-            Debug.LogError("Building Generator Prefab must have a PolygonBuildingGenerator component!", this);
-            return;
-        }
-
-        if (defaultBuildingStyle == null && (availableBuildingStyles == null || availableBuildingStyles.Count == 0 || availableBuildingStyles.All(s => s == null)))
-        {
-            Debug.LogWarning("DefaultBuildingStyle is not assigned, and no valid AvailableBuildingStyles are provided. Buildings might not generate correctly if their style is not set.", this);
-        }
+        if (!ValidatePrerequisites()) return;
 
         _generatedData = new CitySectorData();
-
         Transform sectorRoot = GetGeneratedSectorRoot();
 
+        // Generate initial data for Voronoi diagram
         _generatedData.SeedPoints = GenerateSeedPoints(numberOfSeedPoints, sectorSize, voronoiBoundsPadding);
-
-        if (_generatedData.SeedPoints.Count < 3)
-        {
-            Debug.LogWarning("Not enough unique seed points (need at least 3 for Delaunay) to generate a Voronoi diagram.", this);
-            return;
-        }
-
         var miconvexInputPoints = _generatedData.SeedPoints
             .Select(p => new DefaultVertex { Position = new double[] { p.x, p.y } })
             .ToList();
 
+        // Create the Delaunay triangulation, which is the dual of the Voronoi diagram
         try
         {
-            _generatedData.DelaunayTriangulation = Triangulation.CreateDelaunay<DefaultVertex, DefaultTriangulationCell<DefaultVertex>>(
-                                                    miconvexInputPoints, Constants.DefaultPlaneDistanceTolerance);
+            _generatedData.DelaunayTriangulation = Triangulation.CreateDelaunay(miconvexInputPoints);
         }
         catch (System.Exception ex)
         {
-            Debug.LogError($"Error during Delaunay triangulation: {ex.Message}\n{ex.StackTrace}", this);
+            Debug.LogError($"Delaunay triangulation failed: {ex.Message}", this);
             return;
         }
 
         if (_generatedData.DelaunayTriangulation == null || !_generatedData.DelaunayTriangulation.Cells.Any())
         {
-            Debug.LogError("Delaunay triangulation failed to produce any cells.", this);
+            Debug.LogError("Delaunay triangulation produced no cells.", this);
             return;
         }
-        // Debug.Log($"Delaunay triangulation successful. Number of Delaunay cells (triangles): {_generatedData.DelaunayTriangulation.Cells.Count()}", this);
 
         int buildingsPlacedCount = 0;
+        // Process each Voronoi site to create a building plot
         for (int i = 0; i < miconvexInputPoints.Count; i++)
         {
-            DefaultVertex currentSiteMIVertex = miconvexInputPoints[i];
-            Vector2 currentSiteVec2 = _generatedData.SeedPoints[i];
-
-            // Find all Delaunay triangles (cells) that have the currentSiteMIVertex as one of their vertices.
-            // Using ReferenceEquals is more robust than comparing float positions.
-            var incidentDelaunayTriangles = _generatedData.DelaunayTriangulation.Cells
-                .Where(triangle => triangle.Vertices != null && triangle.Vertices.Any(tv => System.Object.ReferenceEquals(tv, currentSiteMIVertex)))
-                .ToList();
-
-            if (incidentDelaunayTriangles.Count < 1)
+            if (TryProcessSite(miconvexInputPoints[i], out var buildingFootprint, out var pavementPlot))
             {
-                // Debug.LogWarning($"Site {i} ({currentSiteVec2}) has no incident Delaunay triangles. This can happen for sites on the convex hull of all seed points if Voronoi cells extend to infinity. Skipping Voronoi cell generation for this site based purely on its own triangles for now.");
-                continue;
-            }
+                _generatedData.ProcessedBuildingPlots.Add(new List<Vector2>(pavementPlot));
+                bool success = InstantiateAndGenerateBuildingOnPlot(buildingFootprint, pavementPlot, sectorRoot, buildingsPlacedCount);
 
-            List<Vector2> voronoiCellVertices = new List<Vector2>();
-            // int triangleCounter = 0;
-            foreach (var triangle in incidentDelaunayTriangles) // triangle is DefaultTriangulationCell<DefaultVertex>
-            {
-                // triangleCounter++;
-                if (triangle.Vertices != null && triangle.Vertices.Length == 3)
+                if (success)
                 {
-                    // triangle.Vertices are DefaultVertex[], so triangle.Vertices[0] is a DefaultVertex
-                    double[] circumcenterCoords = PolygonUtils.CalculateCircumcenter(
-                                                        triangle.Vertices[0],
-                                                        triangle.Vertices[1],
-                                                        triangle.Vertices[2]);
-
-                    if (circumcenterCoords != null)
-                    {
-                        voronoiCellVertices.Add(new Vector2((float)circumcenterCoords[0], (float)circumcenterCoords[1]));
-                        // Debug.Log($"Site {i}, Triangle {triangleCounter}: Added circumcenter {circumcenter} calculated from 2D vertices.");
-                    }
-
-                }
-            }
-
-            if (voronoiCellVertices.Count >= 3)
-            {
-                voronoiCellVertices = PolygonUtils.OrderVerticesOfPolygon(voronoiCellVertices, currentSiteVec2);
-                _generatedData.RawVoronoiCells.Add(new List<Vector2>(voronoiCellVertices));
-
-                Rect sectorBoundsRect = new Rect(-sectorSize.x / 2f, -sectorSize.y / 2f, sectorSize.x, sectorSize.y);
-                List<Vector2> clippedCell = ClipPolygonSutherlandHodgman.GetIntersectedPolygon(voronoiCellVertices, sectorBoundsRect);
-
-                if (clippedCell != null && clippedCell.Count >= 3)
-                {
-                    // ---- SNAP CLIPPED CELL VERTICES ----
-                    List<Vector2> snappedClippedCell = clippedCell; // Start with the original clipped cell
-                    if (plotVertexSnapSize > GeometryConstants.GeometricEpsilon)
-                    {
-                        snappedClippedCell = PolygonUtils.SnapPolygonVertices2D(clippedCell, plotVertexSnapSize);
-                        if (snappedClippedCell == null || snappedClippedCell.Count < 3)
-                        {
-                            // Debug.LogWarning($"Site {i}: Snapping of clipped cell resulted in a degenerate polygon. Skipping plot.");
-                            continue; // Skip this plot if snapping made it invalid
-                        }
-                    }
-                    // ---- END SNAPPING ----
-
-                    List<Vector2> pavementPlotVertices = PolygonUtils.OffsetPolygonBasic(snappedClippedCell, streetWidth / 2.0f);
-
-                    if (pavementPlotVertices != null && pavementPlotVertices.Count >= 3)
-                    {
-                        if (PolygonUtils.ValidatePlotGeometry(pavementPlotVertices, minPlotSideLength, minPlotAngleDegrees, minPlotArea))
-                        {
-                            // Now, shrink the pavement plot to get the building footprint
-                            List<Vector2> buildingFootprintVertices = null;
-                            if (buildingInsetFromPavementEdge > GeometryConstants.GeometricEpsilon)
-                            {
-                                buildingFootprintVertices = PolygonUtils.OffsetPolygonBasic(pavementPlotVertices, buildingInsetFromPavementEdge);
-                            }
-                            else
-                            {
-                                buildingFootprintVertices = new List<Vector2>(pavementPlotVertices); // No further inset
-                            }
-
-                            if (buildingFootprintVertices != null && buildingFootprintVertices.Count >= 3)
-                            {
-                                if (PolygonUtils.ValidatePlotGeometry(buildingFootprintVertices,
-                                                                     minPlotSideLength, // Slightly smaller side allowed for building
-                                                                     minPlotAngleDegrees,      // Same angle
-                                                                     minPlotArea))     // Smaller area allowed for building
-                                {
-
-
-                                    _generatedData.ProcessedBuildingPlots.Add(new List<Vector2>(pavementPlotVertices));
-
-                                    // Try to instantiate and generate the building
-                                    bool buildingSuccess = InstantiateAndGenerateBuildingOnPlot(
-                                        buildingFootprintVertices,      // INSET footprint for the building structure
-                                        pavementPlotVertices,           // ORIGINAL (non-inset) plot for the pavement
-                                        sectorRoot,
-                                        buildingsPlacedCount
-                                    );
-
-                                    if (buildingSuccess)
-                                    {
-                                        buildingsPlacedCount++;
-                                    }
-                                    else
-                                    {
-                                        if (_generatedData.ProcessedBuildingPlots.Count > 0 &&
-                                            _generatedData.ProcessedBuildingPlots.Last() == pavementPlotVertices)
-                                        {
-                                            _generatedData.ProcessedBuildingPlots.RemoveAt(_generatedData.ProcessedBuildingPlots.Count - 1);
-                                        }
-                                        Debug.LogWarning($"Plot for site {i} (potential building {buildingsPlacedCount}) failed to generate a building. Pavement and building attempt removed.");
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Debug.Log($"City sector generation complete. Placed {buildingsPlacedCount} buildings out of {_generatedData.RawVoronoiCells.Count} raw Voronoi cells (from {_generatedData.SeedPoints.Count} seeds).", this);
-    }
-
-    private bool InstantiateAndGenerateBuildingOnPlot(
-        List<Vector2> buildingFootprintVertices2D,    // INSET footprint for the building structure
-        List<Vector2> originalPavementPlotVertices2D, // NON-INSET plot for the pavement
-        Transform sectorRoot,
-        int plotIndex)
-    {
-        if (buildingFootprintVertices2D == null || buildingFootprintVertices2D.Count < 3)
-        {
-            Debug.LogWarning($"Plot {plotIndex}: Cannot init building, building footprint has < 3 vertices.");
-            return false;
-        }
-
-        // --- INSTANTIATE THE POLYGONBUILDINGGENERATOR PREFAB ---
-        // This GameObject will be the root for this "Building Complex" (structure + pavement)
-        GameObject buildingComplexGO = Instantiate(buildingGeneratorPrefab);
-        buildingComplexGO.name = $"BuildingComplex_{plotIndex}";
-        buildingComplexGO.transform.SetParent(sectorRoot, false);
-
-        if (!buildingComplexGO.TryGetComponent<PolygonBuildingGenerator>(out var buildingGenerator))
-        {
-            Debug.LogError($"Plot {plotIndex}: Instantiated building prefab '{buildingGeneratorPrefab.name}' must have a PolygonBuildingGenerator. Destroying instance.", buildingComplexGO);
-            DestroySafely(buildingComplexGO);
-            return false;
-        }
-
-        // --- CONFIGURE THE POLYGONBUILDINGGENERATOR ---
-        // 1. Set Building Footprint (vertexData)
-        List<PolygonVertexData> footprintForBuildingStructure = buildingFootprintVertices2D
-            .Select(v2 => new PolygonVertexData { position = new Vector3(v2.x, 0, v2.y), addCornerElement = true })
-            .ToList();
-
-        float signedArea = BuildingFootprintUtils.CalculateSignedAreaXZ(footprintForBuildingStructure);
-        if (signedArea > GeometryConstants.GeometricEpsilon) // If Clockwise (negative area)
-        {
-            footprintForBuildingStructure.Reverse();
-        }
-
-        buildingGenerator.vertexData = footprintForBuildingStructure;
-
-        // 2. Set Pavement Data
-        if (originalPavementPlotVertices2D != null && originalPavementPlotVertices2D.Count >= 3)
-        {
-            buildingGenerator.originalPavementPlotVertices2D = new List<Vector2>(originalPavementPlotVertices2D);
-        }
-        else
-        {
-            buildingGenerator.originalPavementPlotVertices2D = null;
-        }
-        buildingGenerator.pavementMaterial = this.pavementMaterial;
-        buildingGenerator.pavementOutset = this.buildingInsetFromPavementEdge;
-
-        // 3. Synchronize side data (for facades, etc.)
-        buildingGenerator.SynchronizeSideData();
-
-        // 4. Assign Building Style
-        buildingGenerator.buildingStyle = GetRandomStyle();
-        if (buildingGenerator.buildingStyle == null)
-        {
-            Debug.LogError($"Plot {plotIndex}: Critical - No BuildingStyleSO assigned for {buildingComplexGO.name}. Destroying instance.");
-            DestroySafely(buildingComplexGO);
-            return false;
-        }
-
-        // 5. Randomize Floors
-        buildingGenerator.middleFloors = Random.Range(minFloors, maxFloors + 1);
-
-        // 6. Randomize Corner Elements
-        if (footprintForBuildingStructure.Count > 0)
-        {
-            for (int vIdx = 0; vIdx < footprintForBuildingStructure.Count; vIdx++)
-            {
-                PolygonVertexData currentVertexData = footprintForBuildingStructure[vIdx]; // Get a copy of the struct
-                currentVertexData.addCornerElement = Random.value < chancePerVertexForCorner;
-                footprintForBuildingStructure[vIdx] = currentVertexData; // Assign the modified struct back
-            }
-        }
-
-        // 7. Randomize Attic Floor
-        buildingGenerator.useAtticFloor = Random.value < chanceForAtticFloor;
-
-        //8. Randomize roof parameters
-        buildingGenerator.mansardSlopeHorizontalDistance = Random.Range(randomMansardHDistRange.x, randomMansardHDistRange.y);
-        buildingGenerator.mansardRiseHeight = Random.Range(randomMansardRiseRange.x, randomMansardRiseRange.y);
-
-        buildingGenerator.atticSlopeHorizontalDistance = Random.Range(randomAtticHDistRange.x, randomAtticHDistRange.y);
-        buildingGenerator.atticRiseHeight = Random.Range(randomAtticRiseRange.x, randomAtticRiseRange.y);
-
-        // 9. Apply Style Variation Logic
-        if (Random.value < chanceForVariedSides && availableSideStylesForVariation != null && availableSideStylesForVariation.Count > 0)
-        {
-            buildingGenerator.useConsistentStyleForAllSides = false;
-            for (int i = 0; i < buildingGenerator.sideData.Count; i++) // sideData was synced above
-            {
-                if (Random.value < 0.5f)
-                {
-                    buildingGenerator.sideData[i].useCustomStyle = true;
-                    buildingGenerator.sideData[i].sideStylePreset = availableSideStylesForVariation[Random.Range(0, availableSideStylesForVariation.Count)];
+                    buildingsPlacedCount++;
                 }
                 else
                 {
-                    buildingGenerator.sideData[i].useCustomStyle = false;
+                    // If building generation failed, remove its plot from the data
+                    _generatedData.ProcessedBuildingPlots.RemoveAt(_generatedData.ProcessedBuildingPlots.Count - 1);
                 }
             }
         }
-        else
+        Debug.Log($"City sector generation complete. Placed {buildingsPlacedCount} buildings.", this);
+    }
+
+    /// <summary>
+    /// Processes a single Voronoi site to generate valid building and pavement plots.
+    /// </summary>
+    /// <returns>True if a valid plot was created, false otherwise.</returns>
+    private bool TryProcessSite(DefaultVertex site, out List<Vector2> buildingFootprint, out List<Vector2> pavementPlot)
+    {
+        buildingFootprint = null;
+        pavementPlot = null;
+
+        // 1. Create the raw Voronoi cell from the Delaunay triangulation
+        List<Vector2> rawCell = CreateVoronoiCell(site, _generatedData.DelaunayTriangulation);
+        if (rawCell == null) return false;
+        _generatedData.RawVoronoiCells.Add(new List<Vector2>(rawCell));
+
+        // 2. Clip the cell to the sector's boundaries
+        Rect sectorBoundsRect = new Rect(-sectorSize.x / 2f, -sectorSize.y / 2f, sectorSize.x, sectorSize.y);
+        List<Vector2> clippedCell = ClipPolygonSutherlandHodgman.GetIntersectedPolygon(rawCell, sectorBoundsRect);
+        if (clippedCell == null || clippedCell.Count < 3) return false;
+
+        // 3. (Optional) Snap vertices to a grid
+        List<Vector2> snappedCell = (plotVertexSnapSize > 1e-6f) ? PolygonUtils.SnapPolygonVertices2D(clippedCell, plotVertexSnapSize) : clippedCell;
+        if (snappedCell == null || snappedCell.Count < 3) return false;
+
+        // 4. Shrink the cell to create the pavement plot (leaving space for streets)
+        pavementPlot = PolygonUtils.OffsetPolygonBasic(snappedCell, streetWidth / 2.0f);
+        if (pavementPlot == null || !PolygonUtils.ValidatePlotGeometry(pavementPlot, minPlotSideLength, minPlotAngleDegrees, minPlotArea)) return false;
+
+        // 5. Shrink the pavement plot to create the final building footprint
+        buildingFootprint = (buildingInsetFromPavementEdge > 1e-6f)
+            ? PolygonUtils.OffsetPolygonBasic(pavementPlot, buildingInsetFromPavementEdge)
+            : new List<Vector2>(pavementPlot);
+
+        // 6. Final validation of the building footprint
+        return buildingFootprint != null && PolygonUtils.ValidatePlotGeometry(buildingFootprint, minPlotSideLength, minPlotAngleDegrees, minPlotArea);
+    }
+
+    /// <summary>
+    /// Creates a Voronoi cell polygon for a given site using its incident triangles from the Delaunay triangulation.
+    /// </summary>
+    private List<Vector2> CreateVoronoiCell(DefaultVertex site, ITriangulation<DefaultVertex, DefaultTriangulationCell<DefaultVertex>> delaunay)
+    {
+        // The vertices of a Voronoi cell are the circumcenters of the Delaunay triangles connected to the site
+        var incidentTriangles = delaunay.Cells.Where(c => c.Vertices.Contains(site)).ToList();
+        if (incidentTriangles.Count < 1) return null;
+
+        var circumcenters = new List<Vector2>();
+        foreach (var triangle in incidentTriangles)
         {
-            buildingGenerator.useConsistentStyleForAllSides = true;
+            double[] center = PolygonUtils.CalculateCircumcenter(triangle.Vertices[0], triangle.Vertices[1], triangle.Vertices[2]);
+            if (center != null) circumcenters.Add(new Vector2((float)center[0], (float)center[1]));
         }
 
-        bool success = buildingGenerator.GenerateBuilding(); // Generates building parts AND pavement
+        if (circumcenters.Count < 3) return null;
 
-        if (!success)
+        var siteCenter = new Vector2((float)site.Position[0], (float)site.Position[1]);
+        return PolygonUtils.OrderVerticesOfPolygon(circumcenters, siteCenter);
+    }
+
+    /// <summary>
+    /// Instantiates and configures a building generator for a given plot, then triggers generation.
+    /// </summary>
+    /// <returns>True if the building was generated successfully.</returns>
+    private bool InstantiateAndGenerateBuildingOnPlot(List<Vector2> buildingFootprint2D, List<Vector2> pavementPlot2D, Transform sectorRoot, int plotIndex)
+    {
+        GameObject buildingComplexGO = Instantiate(buildingGeneratorPrefab, sectorRoot);
+        buildingComplexGO.name = $"BuildingComplex_{plotIndex}";
+
+        if (!buildingComplexGO.TryGetComponent<PolygonBuildingGenerator>(out var generator))
         {
-            Debug.LogWarning($"Plot {plotIndex}: Full building complex generation failed for '{buildingComplexGO.name}'. Destroying the main complex GO.");
-            DestroySafely(buildingComplexGO); // Destroy the PolygonBuildingGenerator's GameObject
+            Debug.LogError($"Instantiated prefab for plot {plotIndex} is missing a PolygonBuildingGenerator component.", buildingComplexGO);
+            DestroySafely(buildingComplexGO);
             return false;
         }
 
+        // Configure the generator with plot data and randomized parameters
+        ConfigureBuildingGenerator(generator, buildingFootprint2D, pavementPlot2D);
+
+        // Trigger the final building and pavement generation
+        bool success = generator.GenerateBuilding();
+        if (!success)
+        {
+            Debug.LogWarning($"Generation failed for building {plotIndex}. Destroying instance.", buildingComplexGO);
+            DestroySafely(buildingComplexGO);
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Sets all randomized parameters on a new building generator instance.
+    /// </summary>
+    private void ConfigureBuildingGenerator(PolygonBuildingGenerator generator, List<Vector2> buildingFootprint2D, List<Vector2> pavementPlot2D)
+    {
+        // 1. Footprint & Pavement
+        List<PolygonVertexData> footprint3D = buildingFootprint2D
+            .Select(v => new PolygonVertexData { position = new Vector3(v.x, 0, v.y), addCornerElement = Random.value < chancePerVertexForCorner })
+            .ToList();
+        // Ensure counter-clockwise winding order for correct normal calculations
+        if (BuildingFootprintUtils.CalculateSignedAreaXZ(footprint3D) > 0) footprint3D.Reverse();
+
+        generator.vertexData = footprint3D;
+        generator.originalPavementPlotVertices2D = pavementPlot2D;
+        generator.pavementMaterial = this.pavementMaterial;
+        generator.pavementOutset = this.buildingInsetFromPavementEdge;
+        generator.SynchronizeSideData();
+
+        // 2. Style
+        generator.buildingStyle = GetRandomStyle();
+        if (Random.value < chanceForVariedSides && availableSideStylesForVariation?.Count > 0)
+        {
+            generator.useConsistentStyleForAllSides = false;
+            for (int i = 0; i < generator.sideData.Count; i++)
+            {
+                if (Random.value < 0.5f)
+                { // 50% chance for a side to get a custom style
+                    generator.sideData[i].useCustomStyle = true;
+                    generator.sideData[i].sideStylePreset = availableSideStylesForVariation[Random.Range(0, availableSideStylesForVariation.Count)];
+                }
+            }
+        }
+
+        // 3. Structure
+        generator.middleFloors = Random.Range(minFloors, maxFloors + 1);
+        generator.useAtticFloor = Random.value < chanceForAtticFloor;
+        generator.mansardSlopeHorizontalDistance = Random.Range(randomMansardHDistRange.x, randomMansardHDistRange.y);
+        generator.mansardRiseHeight = Random.Range(randomMansardRiseRange.x, randomMansardRiseRange.y);
+        generator.atticSlopeHorizontalDistance = Random.Range(randomAtticHDistRange.x, randomAtticHDistRange.y);
+        generator.atticRiseHeight = Random.Range(randomAtticRiseRange.x, randomAtticRiseRange.y);
+    }
+
+    /// <summary>
+    /// Destroys all GameObjects generated by this component.
+    /// </summary>
+    public void ClearGeneratedSector()
+    {
+        Transform root = transform.Find(GENERATED_SECTOR_ROOT_NAME);
+        if (root != null) DestroySafely(root.gameObject);
+        _generatedData = new CitySectorData(); // Reset data
+    }
+
+    // --- Helpers and Validation ---
+
+    private bool ValidatePrerequisites()
+    {
+        if (buildingGeneratorPrefab == null || buildingGeneratorPrefab.GetComponent<PolygonBuildingGenerator>() == null)
+        {
+            Debug.LogError("Building Generator Prefab (with PolygonBuildingGenerator component) is not assigned.", this);
+            return false;
+        }
+        if (defaultBuildingStyle == null && (availableBuildingStyles == null || !availableBuildingStyles.Any(s => s != null)))
+        {
+            Debug.LogWarning("No valid building styles are assigned. Buildings may fail to generate.", this);
+        }
         return true;
     }
 
     private void DestroySafely(GameObject obj)
     {
         if (obj == null) return;
-        if (Application.isEditor && !Application.isPlaying)
-            DestroyImmediate(obj);
-        else
-            Destroy(obj);
+        if (Application.isEditor && !Application.isPlaying) DestroyImmediate(obj);
+        else Destroy(obj);
     }
 
-    public void ClearGeneratedSector()
-    {
-        Transform root = transform.Find(GENERATED_SECTOR_ROOT_NAME);
-        if (root != null)
-        {
-            // DestroyImmediate is for editor context. If running builds, use Destroy.
-            if (Application.isEditor && !Application.isPlaying)
-                DestroyImmediate(root.gameObject);
-            else
-                Destroy(root.gameObject);
-        }
-        _generatedData = new CitySectorData();
-    }
-
-    Transform GetGeneratedSectorRoot()
+    private Transform GetGeneratedSectorRoot()
     {
         Transform root = transform.Find(GENERATED_SECTOR_ROOT_NAME);
         if (root == null)
         {
-            GameObject rootGO = new GameObject(GENERATED_SECTOR_ROOT_NAME);
-            rootGO.transform.SetParent(this.transform, false);
-            root = rootGO.transform;
+            root = new GameObject(GENERATED_SECTOR_ROOT_NAME).transform;
+            root.SetParent(this.transform, false);
         }
         return root;
     }
 
-    List<Vector2> GenerateSeedPoints(int count, Vector2 dimensions, float padding)
+    private List<Vector2> GenerateSeedPoints(int count, Vector2 dimensions, float padding)
     {
-        List<Vector2> points = new List<Vector2>();
-        Random.InitState((int)System.DateTime.Now.Ticks + GetInstanceID());
-
+        var points = new HashSet<Vector2>(); // Use HashSet to automatically handle duplicates
         float minX = -dimensions.x / 2f + padding;
         float maxX = dimensions.x / 2f - padding;
         float minY = -dimensions.y / 2f + padding;
         float maxY = dimensions.y / 2f - padding;
 
-        if (minX >= maxX || minY >= maxY)
-        {
-            Debug.LogWarning("Voronoi bounds padding is too large for the sector size. Using full sector for seed points.", this);
-            minX = -dimensions.x / 2f; maxX = dimensions.x / 2f;
-            minY = -dimensions.y / 2f; maxY = dimensions.y / 2f;
-        }
-
         for (int i = 0; i < count; i++)
         {
             points.Add(new Vector2(Random.Range(minX, maxX), Random.Range(minY, maxY)));
         }
-        return points.Distinct().ToList(); // Ensure unique points
+        return points.ToList();
     }
 
-    BuildingStyleSO GetRandomStyle()
+    private BuildingStyleSO GetRandomStyle()
     {
-        List<BuildingStyleSO> validStyles = null;
-        if (availableBuildingStyles != null && availableBuildingStyles.Count > 0)
-        {
-            validStyles = availableBuildingStyles.Where(s => s != null).ToList();
-        }
-
+        var validStyles = availableBuildingStyles?.Where(s => s != null).ToList();
         if (validStyles != null && validStyles.Count > 0)
         {
             return validStyles[Random.Range(0, validStyles.Count)];
         }
-        return defaultBuildingStyle; // This can also be null if not set
+        return defaultBuildingStyle; // Fallback to default
     }
 
-    void OnValidate()
+    private void OnValidate()
     {
+        // Clamp values to ensure sane generation parameters
         numberOfSeedPoints = Mathf.Max(4, numberOfSeedPoints);
         streetWidth = Mathf.Max(0.1f, streetWidth);
         minFloors = Mathf.Max(1, minFloors);
         maxFloors = Mathf.Max(minFloors, maxFloors);
         voronoiBoundsPadding = Mathf.Max(0, voronoiBoundsPadding);
-
         minPlotSideLength = Mathf.Max(0.1f, minPlotSideLength);
         minPlotAngleDegrees = Mathf.Clamp(minPlotAngleDegrees, 1f, 179f);
         minPlotArea = Mathf.Max(0.1f, minPlotArea);
-
-        // Validate new randomization range fields
-        if (randomMansardHDistRange.y < randomMansardHDistRange.x) randomMansardHDistRange.y = randomMansardHDistRange.x;
-        randomMansardHDistRange.x = Mathf.Max(0f, randomMansardHDistRange.x);
-        randomMansardHDistRange.y = Mathf.Max(0f, randomMansardHDistRange.y);
-
-        if (randomMansardRiseRange.y < randomMansardRiseRange.x) randomMansardRiseRange.y = randomMansardRiseRange.x;
-        randomMansardRiseRange.x = Mathf.Max(0f, randomMansardRiseRange.x);
-        randomMansardRiseRange.y = Mathf.Max(0f, randomMansardRiseRange.y);
-
-        if (randomAtticHDistRange.y < randomAtticHDistRange.x) randomAtticHDistRange.y = randomAtticHDistRange.x;
-        randomAtticHDistRange.x = Mathf.Max(0f, randomAtticHDistRange.x);
-        randomAtticHDistRange.y = Mathf.Max(0f, randomAtticHDistRange.y);
-
-        if (randomAtticRiseRange.y < randomAtticRiseRange.x) randomAtticRiseRange.y = randomAtticRiseRange.x;
-        randomAtticRiseRange.x = Mathf.Max(0f, randomAtticRiseRange.x);
-        randomAtticRiseRange.y = Mathf.Max(0f, randomAtticRiseRange.y);
-
         buildingInsetFromPavementEdge = Mathf.Max(0f, buildingInsetFromPavementEdge);
     }
 }

@@ -2,7 +2,6 @@ using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 
-// Removed: RoofDebugData struct
 
 /// <summary>
 /// Responsible for generating procedural roof layers (mansard, attic, flat top).
