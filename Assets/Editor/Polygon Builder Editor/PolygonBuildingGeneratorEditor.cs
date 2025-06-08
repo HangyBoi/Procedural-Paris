@@ -153,7 +153,7 @@ public class PolygonBuildingGeneratorEditor : Editor
         if (GUILayout.Button("Clear Building"))
         {
             Undo.RecordObject(_targetScript.gameObject, "Clear Building");
-            _targetScript.ClearBuilding();
+            _targetScript.ClearAllGeneratedObjects();
             MarkSceneDirty();
         }
     }
@@ -210,11 +210,7 @@ public class PolygonBuildingGeneratorEditor : Editor
         if (changedByHandle)
         {
             serializedObject.ApplyModifiedProperties();
-            // Wait for mouse release to trigger full regeneration to avoid lag during dragging
-            if (Event.current.type == EventType.MouseUp)
-            {
-                RequestRegenerateAndRepaint();
-            }
+            RequestRegenerateAndRepaint();
         }
     }
 

@@ -2,57 +2,45 @@
 // *Explanatory Comments and Headers were written with help of AI*
 // *General Review, Formatting, Optimization and Code Cleanup were done by AI*
 //
-//  This script provides utility methods for 2D polygon and geometric calculations, primarily using Vector2.
-//  It also includes methods for calculating circumcenters, ordering vertices, offsetting polygons, and validating plot geometry.
-//  The code is designed to work with Unity's Vector2 and MIConvexHull types.
+// This script provides utility methods for 2D polygon and geometric calculations.
 //
 
 using UnityEngine;
 using System.Collections.Generic;
-using MIConvexHull;
 using System.Linq;
+using MIConvexHull;
 
 /// <summary>
-/// Utility class for 2D polygon and geometric calculations, primarily using Vector2.
-/// Also includes methods interacting with MIConvexHull types.
+/// A static utility class for 2D polygon and geometric calculations, primarily using Vector2.
+/// Includes methods for calculating circumcenters, ordering vertices, offsetting, and validation.
 /// </summary>
 public static class PolygonUtils
 {
     /// <summary>
-    /// Calculates the 2D circumcenter of a triangle defined by three MIConvexHull IVertex points.
-    /// The Z-coordinate of the IVertex positions is ignored.
+    /// Calculates the 2D circumcenter of a triangle defined by three IVertex points.
+    /// The Z-coordinate is ignored.
     /// </summary>
-    /// <param name="p1">The first vertex of the triangle.</param>
-    /// <param name="p2">The second vertex of the triangle.</param>
-    /// <param name="p3">The third vertex of the triangle.</param>
-    /// <returns>A double array [x, y] representing the circumcenter, or null if points are collinear.</returns>
+    /// <returns>A double array [x, y] for the circumcenter, or null if points are collinear.</returns>
     public static double[] CalculateCircumcenter(IVertex p1, IVertex p2, IVertex p3)
     {
-        // Extract 2D coordinates (assuming X and Y are the relevant dimensions)
-        double ax = p1.Position[0];
-        double ay = p1.Position[1];
-        double bx = p2.Position[0];
-        double by = p2.Position[1];
-        double cx = p3.Position[0];
-        double cy = p3.Position[1];
+        double p1x = p1.Position[0], p1y = p1.Position[1];
+        double p2x = p2.Position[0], p2y = p2.Position[1];
+        double p3x = p3.Position[0], p3y = p3.Position[1];
 
-        // Squared lengths from origin (used in the formula)
-        double aSq = ax * ax + ay * ay;
-        double bSq = bx * bx + by * by;
-        double cSq = cx * cx + cy * cy;
-
-        // Denominator D for the circumcenter formula.
-        // This is related to twice the signed area of the triangle. If D is near zero, points are collinear.
-        double D = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-
-        if (System.Math.Abs(D) < GeometryConstants.HighPrecisionEpsilon) // Using a specific epsilon for this critical check
+        // The determinant D is twice the signed area of the triangle. If D is near zero, the points are collinear.
+        double D = 2.0 * (p1x * (p2y - p3y) + p2x * (p3y - p1y) + p3x * (p1y - p2y));
+        if (System.Math.Abs(D) < GeometryConstants.HighPrecisionEpsilon)
         {
-            return null; // Points are collinear, no unique circumcircle
+            return null; // Points are collinear, no unique circumcenter.
         }
 
-        // The Cartesian coordinates numerators (taken from Wikipedia) for X and Y of the circumcenter U = (Ux, Uy) are:
-        double ux = (aSq * (by - cy) + bSq * (cy - ay) + cSq * (ay - by)) / D;
-        double uy = (aSq * (cx - bx) + bSq * (ax - cx) + cSq * (bx - ax)) / D;
+        // Use squared lengths and Cartesian formula to find the circumcenter U = (Ux, Uy).
+        double p1Sq = p1x * p1x + p1y * p1y;
+        double p2Sq = p2x * p2x + p2y * p2y;
+        double p3Sq = p3x * p3x + p3y * p3y;
+
+        double ux = (p1Sq * (p2y - p3y) + p2Sq * (p3y - p1y) + p3Sq * (p1y - p2y)) / D;
+        double uy = (p1Sq * (p3x - p2x) + p2Sq * (p1x - p3x) + p3Sq * (p2x - p1x)) / D;
 
         return new double[] { ux, uy };
     }
@@ -61,85 +49,59 @@ public static class PolygonUtils
     /// Orders a list of 2D vertices polygonally (counter-clockwise) around a given center point.
     /// </summary>
     /// <param name="vertices">The list of Vector2 vertices to order.</param>
-    /// <param name="centerPoint">The reference point around which to sort the vertices.</param>
-    /// <returns>A new list containing the sorted vertices, or the original list if fewer than 3 vertices.</returns>
-    public static List<Vector2> OrderVerticesOfPolygon(List<Vector2> vertices, Vector2 centerPoint) // Changed centerPoint to Vector2
+    /// <param name="centerPoint">The reference point to sort around.</param>
+    /// <returns>A new list containing the sorted vertices.</returns>
+    public static List<Vector2> OrderVerticesOfPolygon(List<Vector2> vertices, Vector2 centerPoint)
     {
-        if (vertices == null || vertices.Count < 3)
-        {
-            return vertices; // Not enough vertices to form a meaningful polygon or to sort
-        }
+        if (vertices == null || vertices.Count < 3) return vertices;
 
-        // Create a new list to avoid modifying the original if it's passed around elsewhere
-        List<Vector2> sortedVertices = new(vertices);
+        var sortedVertices = new List<Vector2>(vertices);
 
-        // Sort vertices by the angle they make with the centerPoint.
-        // Mathf.Atan2(y, x) returns the angle in radians between the positive X-axis and the point (x, y).
+        // Sort vertices by the angle they make with the center point using Atan2.
         sortedVertices.Sort((v1, v2) =>
         {
             double angle1 = Mathf.Atan2(v1.y - centerPoint.y, v1.x - centerPoint.x);
             double angle2 = Mathf.Atan2(v2.y - centerPoint.y, v2.x - centerPoint.x);
-            return angle1.CompareTo(angle2); // Sorts in ascending order of angle (CCW)
+            return angle1.CompareTo(angle2);
         });
 
         return sortedVertices;
     }
 
     /// <summary>
-    /// Shrinks a 2D polygon by moving its vertices towards its centroid by a specified distance.
-    /// This is a basic shrinking method and may not preserve shape perfectly or handle self-intersections.
+    /// Creates a new polygon by offsetting each vertex towards the centroid.
+    /// A positive distance shrinks the polygon, a negative distance expands it.
     /// </summary>
-    /// <param name="polygon">The list of Vector2 vertices defining the polygon.</param>
-    /// <param name="distance">The distance to shrink inwards. Must be positive.</param>
-    /// <returns>A new list of shrunk vertices, or null if shrinking fails (e.g., distance too large, degenerate polygon).</returns>
+    /// <returns>A new list of offset vertices, or null if offsetting fails.</returns>
     public static List<Vector2> OffsetPolygonBasic(List<Vector2> polygon, float offsetDistance)
     {
         if (polygon == null || polygon.Count < 3) return null;
-        if (Mathf.Abs(offsetDistance) <= GeometryConstants.GeometricEpsilon) return new List<Vector2>(polygon);
+        if (Mathf.Abs(offsetDistance) < GeometryConstants.GeometricEpsilon) return new List<Vector2>(polygon);
 
-        // Calculate centroid (average of vertices)
         Vector2 centroid = Vector2.zero;
         foreach (var v in polygon) centroid += v;
         centroid /= polygon.Count;
 
-        List<Vector2> offsetPolygon = new List<Vector2>();
-        for (int i = 0; i < polygon.Count; ++i)
+        var offsetPolygon = new List<Vector2>(polygon.Count);
+        foreach (var vertex in polygon)
         {
-            Vector2 vertex = polygon[i];
-            Vector2 directionToCentroid = centroid - vertex;
+            Vector2 directionToCentroid = (centroid - vertex);
+            // Safety check: If a vertex is too close to the centroid, offsetting is ill-defined.
+            if (directionToCentroid.sqrMagnitude < GeometryConstants.GeometricEpsilonSqr) return null;
 
-            // Check for degenerate case: vertex is at centroid
-            if (directionToCentroid.sqrMagnitude < GeometryConstants.GeometricEpsilon * GeometryConstants.GeometricEpsilon)
-            {
-                // This implies a very small or degenerate polygon, or centroid coincides with a vertex.
-                // Returning null is safer as shrinking is ill-defined.
-                return null;
-            }
+            // Safety check: If shrinking, ensure the offset distance doesn't cause the vertex to cross the centroid.
+            if (offsetDistance > 0 && directionToCentroid.magnitude < offsetDistance) return null;
 
-            float distanceToCentroid = directionToCentroid.magnitude;
-
-            // Check if the shrink distance is too large (would cause vertex to cross centroid)
-            if (offsetDistance > 0 && distanceToCentroid < offsetDistance - GeometryConstants.GeometricEpsilon)
-            {
-                // Shrinking by this distance would cause the vertex to cross the centroid or invert.
-                return null;
-            }
             offsetPolygon.Add(vertex + directionToCentroid.normalized * offsetDistance);
         }
-
-        // Check if shrunk polygon is still valid (e.g. not self-intersecting, still has area)
-        // For basic shrink, just check vertex count.
-        if (offsetPolygon.Count < 3) return null;
 
         return offsetPolygon;
     }
 
     /// <summary>
-    /// Calculates the area of a 2D polygon defined by a list of Vector2 vertices.
-    /// Uses the shoelace formula. The result is always non-negative.
+    /// Calculates the area of a 2D polygon using the Shoelace formula.
+    /// The result is always non-negative.
     /// </summary>
-    /// <param name="vertices">The list of Vector2 vertices defining the polygon, assumed to be ordered.</param>
-    /// <returns>The absolute area of the polygon.</returns>
     public static float CalculatePolygonArea(List<Vector2> vertices)
     {
         if (vertices == null || vertices.Count < 3) return 0f;
@@ -148,85 +110,74 @@ public static class PolygonUtils
         for (int i = 0; i < vertices.Count; i++)
         {
             Vector2 p1 = vertices[i];
-            Vector2 p2 = vertices[(i + 1) % vertices.Count]; // Wrap around for the last segment
-
-            // Shoelace formula component: (x1*y2 - x2*y1)
+            Vector2 p2 = vertices[(i + 1) % vertices.Count]; // Wrap around for the last segment.
             area += (p1.x * p2.y) - (p2.x * p1.y);
         }
-        // The sum is twice the signed area. Absolute value gives the geometric area.
-        return Mathf.Abs(area / 2.0f);
+
+        return Mathf.Abs(area * 0.5f);
     }
 
     /// <summary>
-    /// Validates a 2D polygon plot based on minimum side length, minimum interior angle, and minimum area for VISUALLY EFFECTIVE FOOTPRINT GENERATION
+    /// Validates if a 2D polygon plot meets minimum geometric criteria for visual quality.
     /// </summary>
-    /// <param name="plotVertices">The list of Vector2 vertices defining the polygon, assumed to be ordered.</param>
+    /// <param name="plotVertices">The list of ordered vertices defining the polygon.</param>
     /// <param name="minSideLength">Minimum allowed length for any side.</param>
     /// <param name="minAngleDegrees">Minimum allowed interior angle at any vertex (in degrees).</param>
     /// <param name="minArea">Minimum allowed area for the polygon.</param>
     /// <returns>True if the plot meets all criteria, false otherwise.</returns>
     public static bool ValidatePlotGeometry(List<Vector2> plotVertices, float minSideLength, float minAngleDegrees, float minArea)
     {
-        if (plotVertices == null || plotVertices.Count < 3)
-        {
-            return false; // Not a valid polygon
-        }
+        if (plotVertices == null || plotVertices.Count < 3) return false;
 
         // 1. Check Area
-        float area = CalculatePolygonArea(plotVertices);
-        if (area < minArea - GeometryConstants.GeometricEpsilon) // Use epsilon for float comparison
-        {
-            return false; // Area too small
-        }
+        if (CalculatePolygonArea(plotVertices) < minArea) return false;
 
+        // 2. Check each side and vertex
         int n = plotVertices.Count;
         for (int i = 0; i < n; i++)
         {
             Vector2 pCurr = plotVertices[i];
             Vector2 pNext = plotVertices[(i + 1) % n];
-            Vector2 pPrev = plotVertices[(i + n - 1) % n]; // Previous vertex (wraps around)
+            Vector2 pPrev = plotVertices[(i + n - 1) % n];
 
-            // 2. Check Side Length (for side pCurr to pNext)
-            float sideLength = Vector2.Distance(pCurr, pNext);
-            if (sideLength < minSideLength - GeometryConstants.GeometricEpsilon)
-            {
-                return false; // Side too short
-            }
+            // Check side length (from current to next vertex).
+            if (Vector2.Distance(pCurr, pNext) < minSideLength) return false;
 
-            // 3. Check Interior Angle (at pCurr, formed by edges pPrev-pCurr and pNext-pCurr)
-            // Vector from current vertex to previous vertex
-            Vector2 edge1 = pPrev - pCurr;
-            // Vector from current vertex to next vertex
-            Vector2 edge2 = pNext - pCurr;
-
-            // Vector2.Angle returns the unsigned angle between 0 and 180 degrees.
-            // This is suitable for checking interior angles of a simple polygon
-            // if the vertices are ordered (e.g., CCW).
-            float angle = Vector2.Angle(edge1, edge2);
-
-            if (angle < minAngleDegrees - GeometryConstants.GeometricEpsilon)
-            {
-                return false; // Angle too acute
-            }
-
-            // Optional: Could also check for reflex angles (angle > 180) if the polygon is not guaranteed to be convex,
-            // or very flat angles (angle close to 180) if those are also undesirable.
-            // For typical Voronoi cells (convex), this check for acute angles is primary.
+            // Check interior angle (at the current vertex).
+            float angle = Vector2.Angle(pPrev - pCurr, pNext - pCurr);
+            if (angle < minAngleDegrees) return false;
         }
-        return true; // All checks passed
+
+        return true;
     }
 
     /// <summary>
-    /// Snaps a 2D vector to the nearest point on a grid defined by snapSize.
+    /// Snaps all vertices of a 2D polygon to a grid and removes consecutive duplicates.
     /// </summary>
-    /// <param name="vertexPos">The Vector2 to snap.</param>
-    /// <param name="snapSize">The size of the grid cells. If 0 or less, no snapping occurs.</param>
-    /// <returns>The snapped Vector2.</returns>
+    /// <returns>A new list of snapped vertices. May be null or have <3 vertices if snapping causes degeneration.</returns>
+    public static List<Vector2> SnapPolygonVertices2D(List<Vector2> polygonVertices, float snapSize, bool removeDuplicateConsecutive = true)
+    {
+        if (polygonVertices == null || polygonVertices.Count == 0 || snapSize <= GeometryConstants.GeometricEpsilon)
+        {
+            return polygonVertices;
+        }
+
+        var snappedVertices = polygonVertices.Select(v => SnapVertexPosition2D(v, snapSize)).ToList();
+
+        if (removeDuplicateConsecutive)
+        {
+            return RemoveConsecutiveDuplicates(snappedVertices);
+        }
+
+        return snappedVertices;
+    }
+
+    /// <summary>
+    /// Snaps a 2D vector to the nearest point on a grid.
+    /// </summary>
     public static Vector2 SnapVertexPosition2D(Vector2 vertexPos, float snapSize)
     {
-        if (snapSize <= GeometryConstants.GeometricEpsilon) // Use a small epsilon to avoid division by zero or tiny snap sizes
-            return vertexPos;
-
+        if (snapSize <= GeometryConstants.GeometricEpsilon) return vertexPos;
         return new Vector2(
             Mathf.Round(vertexPos.x / snapSize) * snapSize,
             Mathf.Round(vertexPos.y / snapSize) * snapSize
@@ -234,47 +185,29 @@ public static class PolygonUtils
     }
 
     /// <summary>
-    /// Snaps all vertices of a 2D polygon to a grid.
-    /// Optionally removes duplicate consecutive vertices that might result from snapping.
+    /// Helper to filter a list of vertices, removing any vertex that is too close to the one preceding it.
     /// </summary>
-    /// <param name="polygonVertices">The list of Vector2 vertices to snap.</param>
-    /// <param name="snapSize">The grid snap size.</param>
-    /// <param name="removeDuplicateConsecutive">If true, removes consecutive vertices that become identical after snapping.</param>
-    /// <returns>A new list of snapped vertices. Can be null or have <3 vertices if snapping causes degeneration.</returns>
-    public static List<Vector2> SnapPolygonVertices2D(List<Vector2> polygonVertices, float snapSize, bool removeDuplicateConsecutive = true)
+    private static List<Vector2> RemoveConsecutiveDuplicates(List<Vector2> vertices)
     {
-        if (polygonVertices == null || polygonVertices.Count == 0 || snapSize <= GeometryConstants.GeometricEpsilon)
+        if (vertices.Count < 2) return vertices;
+
+        var uniqueVertices = new List<Vector2> { vertices[0] };
+
+        // Remove consecutive duplicates from the main list.
+        for (int i = 1; i < vertices.Count; i++)
         {
-            return polygonVertices; // Return original if no snapping needed or invalid input
+            if (Vector2.SqrMagnitude(vertices[i] - uniqueVertices.Last()) > GeometryConstants.GeometricEpsilonSqr)
+            {
+                uniqueVertices.Add(vertices[i]);
+            }
         }
 
-        List<Vector2> snappedVertices = polygonVertices.Select(v => SnapVertexPosition2D(v, snapSize)).ToList();
-
-        if (removeDuplicateConsecutive && snappedVertices.Count > 1)
+        // After cleaning, check if the first and last vertices are now the same.
+        if (uniqueVertices.Count > 2 && Vector2.SqrMagnitude(uniqueVertices.Last() - uniqueVertices.First()) < GeometryConstants.GeometricEpsilonSqr)
         {
-            List<Vector2> uniqueSnappedVertices = new List<Vector2>();
-            uniqueSnappedVertices.Add(snappedVertices[0]);
-            for (int i = 1; i < snappedVertices.Count; i++)
-            {
-                if (Vector2.Distance(snappedVertices[i], uniqueSnappedVertices[uniqueSnappedVertices.Count - 1]) > GeometryConstants.GeometricEpsilon)
-                {
-                    uniqueSnappedVertices.Add(snappedVertices[i]);
-                }
-            }
-            // Check if the last and first vertex became the same and if removing the last one is safe
-            if (uniqueSnappedVertices.Count > 1 && Vector2.Distance(uniqueSnappedVertices[0], uniqueSnappedVertices[uniqueSnappedVertices.Count - 1]) < GeometryConstants.GeometricEpsilon)
-            {
-                if (uniqueSnappedVertices.Count > 3) // Only remove if it doesn't degenerate to a line/point
-                {
-                    uniqueSnappedVertices.RemoveAt(uniqueSnappedVertices.Count - 1);
-                }
-                // else: snapping made the polygon too small, might be <3 vertices after this.
-            }
-            snappedVertices = uniqueSnappedVertices;
+            uniqueVertices.RemoveAt(uniqueVertices.Count - 1);
         }
 
-        // It's possible snapping degenerates the polygon (e.g., all points snap to a line or single point)
-        // The caller should re-validate the polygon (e.g., check for >= 3 vertices, area, etc.)
-        return snappedVertices;
+        return uniqueVertices;
     }
 }

@@ -1,52 +1,55 @@
+// @Nichita Cebotari
+// *Explanatory Comments and Headers were written with help of AI*
+// *General Review, Formatting,Optimization and Code Cleanup were done by AI*
+//
+// This script implements the Sutherland-Hodgman algorithm for clipping a 2D polygon against an axis-aligned rectangle.
+//
+
 using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Implements the Sutherland-Hodgman polygon clipping algorithm for 2D polygons against a rectangular clipping window.
+/// A static utility class that implements the Sutherland-Hodgman algorithm to clip a
+/// 2D polygon against a rectangular clipping window.
 /// </summary>
 public static class ClipPolygonSutherlandHodgman
 {
     /// <summary>
-    /// Clips a subject polygon against a rectangular clipping window (clipRect).
+    /// Clips a subject polygon against a rectangular clipping window.
+    /// The algorithm processes the polygon against each of the four clipping edges sequentially.
     /// </summary>
-    /// <param name="subjectPolygon">The polygon to be clipped, defined by a list of Vector2 vertices in order.</param>
-    /// <param name="clipRect">The AABB Rect defining the clipping window.</param>
-    /// <returns>A new list of Vector2 vertices representing the clipped polygon, or null if the polygon is entirely outside or becomes degenerate.</returns>
+    /// <param name="subjectPolygon">The polygon to be clipped, defined by a list of vertices in order.</param>
+    /// <param name="clipRect">The axis-aligned Rect defining the clipping window.</param>
+    /// <returns>A new list of vertices for the clipped polygon, or null if it's outside or becomes degenerate.</returns>
     public static List<Vector2> GetIntersectedPolygon(List<Vector2> subjectPolygon, Rect clipRect)
     {
-        if (subjectPolygon == null || subjectPolygon.Count < 3)
-            return null;
+        if (subjectPolygon == null || subjectPolygon.Count < 3) return null;
 
-        List<Vector2> clippedPolygon = new List<Vector2>(subjectPolygon);
+        var clippedPolygon = new List<Vector2>(subjectPolygon);
 
-        // Edge 1: Bottom edge (y = clipRect.yMin), from (xMin, yMin) to (xMax, yMin)
-        // "Inside" means y >= clipRect.yMin.
-        clippedPolygon = ClipAgainstEdge(clippedPolygon,
-                                         new Vector2(clipRect.xMin, clipRect.yMin),
-                                         new Vector2(clipRect.xMax, clipRect.yMin));
-        if (clippedPolygon == null || clippedPolygon.Count < 3) return null;
+        // Define the four clipping edges of the rectangle in a counter-clockwise order.
+        // This ensures that the "inside" of each edge is consistently defined by a left-hand rule.
+        Vector2 p1 = new Vector2(clipRect.xMin, clipRect.yMin);
+        Vector2 p2 = new Vector2(clipRect.xMax, clipRect.yMin);
+        Vector2 p3 = new Vector2(clipRect.xMax, clipRect.yMax);
+        Vector2 p4 = new Vector2(clipRect.xMin, clipRect.yMax);
 
-        // Edge 2: Right edge (x = clipRect.xMax), from (xMax, yMin) to (xMax, yMax)
-        // "Inside" means x <= clipRect.xMax.
-        clippedPolygon = ClipAgainstEdge(clippedPolygon,
-                                         new Vector2(clipRect.xMax, clipRect.yMin),
-                                         new Vector2(clipRect.xMax, clipRect.yMax));
-        if (clippedPolygon == null || clippedPolygon.Count < 3) return null;
+        // Clip against the bottom edge.
+        clippedPolygon = ClipAgainstEdge(clippedPolygon, p1, p2);
+        if (clippedPolygon.Count < 3) return null;
 
-        // Edge 3: Top edge (y = clipRect.yMax), from (xMax, yMax) to (xMin, yMax)
-        // "Inside" means y <= clipRect.yMax.
-        clippedPolygon = ClipAgainstEdge(clippedPolygon,
-                                         new Vector2(clipRect.xMax, clipRect.yMax),
-                                         new Vector2(clipRect.xMin, clipRect.yMax));
-        if (clippedPolygon == null || clippedPolygon.Count < 3) return null;
+        // Clip against the right edge.
+        clippedPolygon = ClipAgainstEdge(clippedPolygon, p2, p3);
+        if (clippedPolygon.Count < 3) return null;
 
-        // Edge 4: Left edge (x = clipRect.xMin), from (xMin, yMax) to (xMin, yMin)
-        // "Inside" means x >= clipRect.xMin.
-        clippedPolygon = ClipAgainstEdge(clippedPolygon,
-                                         new Vector2(clipRect.xMin, clipRect.yMax),
-                                         new Vector2(clipRect.xMin, clipRect.yMin));
+        // Clip against the top edge.
+        clippedPolygon = ClipAgainstEdge(clippedPolygon, p3, p4);
+        if (clippedPolygon.Count < 3) return null;
 
-        return (clippedPolygon != null && clippedPolygon.Count >= 3) ? clippedPolygon : null;
+        // Clip against the left edge.
+        clippedPolygon = ClipAgainstEdge(clippedPolygon, p4, p1);
+
+        return (clippedPolygon.Count >= 3) ? clippedPolygon : null;
     }
 
     /// <summary>
@@ -54,92 +57,86 @@ public static class ClipPolygonSutherlandHodgman
     /// </summary>
     /// <param name="subjectPolygon">The input polygon vertices.</param>
     /// <param name="clipEdgeP1">Start point of the clipping edge vector.</param>
-    /// <param name="clipEdgeP2">End point of the clipping edge vector. Defines direction; "inside" is to its left.</param>
+    /// <param name="clipEdgeP2">End point of the clipping edge vector. "Inside" is to its left.</param>
     /// <returns>The list of vertices of the polygon clipped against this single edge.</returns>
     private static List<Vector2> ClipAgainstEdge(List<Vector2> subjectPolygon, Vector2 clipEdgeP1, Vector2 clipEdgeP2)
     {
-        List<Vector2> outputList = new List<Vector2>();
+        var outputList = new List<Vector2>();
         if (subjectPolygon.Count == 0) return outputList;
 
-        // 's' is the start point of the current subject polygon edge being processed.
+        // 's' is the start point of the current subject polygon edge. Initialize with the last vertex.
         Vector2 s = subjectPolygon[subjectPolygon.Count - 1];
 
-        for (int i = 0; i < subjectPolygon.Count; i++)
+        foreach (Vector2 e in subjectPolygon)
         {
             // 'e' is the end point of the current subject polygon edge.
-            Vector2 e = subjectPolygon[i];
-
             bool s_inside = IsInsideClipEdge(clipEdgeP1, clipEdgeP2, s);
             bool e_inside = IsInsideClipEdge(clipEdgeP1, clipEdgeP2, e);
 
+            // Case 1: Both points are inside -> only add the end point 'e'.
             if (s_inside && e_inside)
             {
-                // Case 1: Both points are inside. Add 'e'.
                 outputList.Add(e);
             }
+            // Case 2: Start is inside, end is outside -> add the intersection point.
             else if (s_inside && !e_inside)
             {
-                // Case 2: Edge goes from inside to outside. Add intersection point.
                 outputList.Add(CalculateIntersectionPoint(clipEdgeP1, clipEdgeP2, s, e));
             }
+            // Case 3: Start is outside, end is inside -> add the intersection point, then the end point 'e'.
             else if (!s_inside && e_inside)
             {
-                // Case 3: Edge goes from outside to inside. Add intersection point, then add 'e'.
                 outputList.Add(CalculateIntersectionPoint(clipEdgeP1, clipEdgeP2, s, e));
                 outputList.Add(e);
             }
-            // Case 4: Both points are outside (do nothing)
+            // Case 4: Both points are outside -> do nothing.
 
-            s = e; // Move to the next edge
+            s = e; // Advance to the next edge.
         }
         return outputList;
     }
 
     /// <summary>
-    /// Checks if a point 'p' is "inside" a clipping edge defined by directed line segment p1->p2.
-    /// "Inside" means to the left of or on the line. Uses 2D cross product.
-    /// (p2.x-p1.x)*(p.y-p1.y) - (p2.y-p1.y)*(p.x-p1.x) >= 0 for "left of or on".
+    /// Checks if a point 'p' is "inside" a clipping edge defined by the directed line p1->p2.
     /// </summary>
+    /// <remarks>
+    /// "Inside" means to the left of or on the line. This is determined using the 2D cross product's Z-component.
+    /// A positive or zero result means the point 'p' is not to the right of the directed edge.
+    /// `(p2.x-p1.x)*(p.y-p1.y) - (p2.y-p1.y)*(p.x-p1.x) >= 0`
+    /// </remarks>
     private static bool IsInsideClipEdge(Vector2 clipEdgeP1, Vector2 clipEdgeP2, Vector2 p)
     {
-        // Cross product: (clipEdgeP2 - clipEdgeP1) x (p - clipEdgeP1)
-        // For 2D vectors v1=(x1,y1), v2=(x2,y2), cross product z-component is x1*y2 - y1*x2.
-        // Here, v1 = clipEdgeP2 - clipEdgeP1, v2 = p - clipEdgeP1.
-        float cross_product_z = (clipEdgeP2.x - clipEdgeP1.x) * (p.y - clipEdgeP1.y) -
-                                (clipEdgeP2.y - clipEdgeP1.y) * (p.x - clipEdgeP1.x);
-        // Point is inside if cross_product_z >= 0 (or >= -epsilon for robustness).
-        return cross_product_z >= -GeometryConstants.GeometricEpsilon;
+        float crossProductZ = (clipEdgeP2.x - clipEdgeP1.x) * (p.y - clipEdgeP1.y) -
+                              (clipEdgeP2.y - clipEdgeP1.y) * (p.x - clipEdgeP1.x);
+
+        // Point is considered inside if it's on the line or to its left.
+        return crossProductZ >= -GeometryConstants.GeometricEpsilon;
     }
 
     /// <summary>
-    /// Calculates the intersection point of two 2D line segments: (seg1_p1 - seg1_p2) and (seg2_p3 - seg2_p4).
-    /// This assumes lines are not parallel (denominator check).
-    /// Used here for finding where a polygon edge (s-e) intersects a clipping edge (clipEdgeP1-clipEdgeP2).
+    /// Calculates the intersection point of two infinite lines defined by segments (clipEdgeP1, clipEdgeP2) and (polyEdgeS, polyEdgeE).
     /// </summary>
     private static Vector2 CalculateIntersectionPoint(Vector2 clipEdgeP1, Vector2 clipEdgeP2, Vector2 polyEdgeS, Vector2 polyEdgeE)
     {
-        // Line 1 (clipping edge): clipEdgeP1 + t * (clipEdgeP2 - clipEdgeP1)
-        // Line 2 (polygon edge): polyEdgeS   + u * (polyEdgeE  - polyEdgeS)
+        // Define the direction vectors for both lines.
+        Vector2 clipEdgeDir = clipEdgeP2 - clipEdgeP1;
+        Vector2 polyEdgeDir = polyEdgeE - polyEdgeS;
 
-        float dx_clip = clipEdgeP2.x - clipEdgeP1.x;
-        float dy_clip = clipEdgeP2.y - clipEdgeP1.y;
-        float dx_poly = polyEdgeE.x - polyEdgeS.x;
-        float dy_poly = polyEdgeE.y - polyEdgeS.y;
-
-        // Denominator for parametric solution: (dx_poly * dy_clip) - (dy_poly * dx_clip)
-        float determinant = (dx_clip * dy_poly) - (dy_clip * dx_poly);
-
+        // Calculate the determinant of the system of linear equations.
+        // If zero, the lines are parallel or collinear.
+        float determinant = (clipEdgeDir.x * polyEdgeDir.y) - (clipEdgeDir.y * polyEdgeDir.x);
         if (Mathf.Abs(determinant) < GeometryConstants.GeometricEpsilon)
         {
-            // Lines are parallel or collinear.
-            // Returning polyEdgeS (or polyEdgeE) is a fallback.
+            // Fallback for parallel lines. The context of the algorithm means this is a rare edge case.
             return polyEdgeS;
         }
 
-        float t_numerator = (polyEdgeS.x - clipEdgeP1.x) * dy_poly - (polyEdgeS.y - clipEdgeP1.y) * dx_poly;
-        float t = t_numerator / determinant; // This 't' is for the clipping edge: clipEdgeP1 + t * (clipEdgeP2 - clipEdgeP1)
+        // Solve for the parametric variable 't' for the clipping edge line.
+        // Line equation: P = clipEdgeP1 + t * clipEdgeDir
+        Vector2 deltaStart = polyEdgeS - clipEdgeP1;
+        float t = ((deltaStart.x * polyEdgeDir.y) - (deltaStart.y * polyEdgeDir.x)) / determinant;
 
-        // Calculate intersection point using parameter 't' for the clipping edge line
-        return new Vector2(clipEdgeP1.x + t * dx_clip, clipEdgeP1.y + t * dy_clip);
+        // Calculate the intersection point using the found parameter 't'.
+        return clipEdgeP1 + t * clipEdgeDir;
     }
 }

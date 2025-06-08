@@ -1,19 +1,25 @@
+// @Nichita Cebotari
+// *Explanatory Comments and Headers were written with help of AI*
+// *General Review, Formatting, Optimization and Code Cleanup were done by AI*
+//
+// This script provides static utility methods for geometric calculations on 3D building footprints.
+//
+
 using UnityEngine;
 using System.Collections.Generic;
 
 /// <summary>
-/// Utility class for geometric calculations specific to 3D building footprints
-/// defined by PolygonVertexData, typically operating on the XZ plane.
+/// A static utility class for geometric calculations specific to 3D building footprints,
+/// typically operating on the XZ plane.
 /// </summary>
 public static class BuildingFootprintUtils
 {
     /// <summary>
-    /// Calculates the signed area of a polygon defined by PolygonVertexData on the XZ plane.
-    /// A positive area indicates Counter-Clockwise (CCW) vertex order,
-    /// a negative area indicates Clockwise (CW) order.
+    /// Calculates the signed area of a polygon on the XZ plane using the Shoelace formula.
+    /// The sign indicates the winding order: positive for Counter-Clockwise (CCW), negative for Clockwise (CW).
     /// </summary>
     /// <param name="vertexData">List of PolygonVertexData defining the footprint.</param>
-    /// <returns>The signed area of the polygon on the XZ plane.</returns>
+    /// <returns>The signed area of the polygon.</returns>
     public static float CalculateSignedAreaXZ(List<PolygonVertexData> vertexData)
     {
         if (vertexData == null || vertexData.Count < 3) return 0f;
@@ -24,20 +30,20 @@ public static class BuildingFootprintUtils
             Vector3 p1 = vertexData[i].position;
             Vector3 p2 = vertexData[(i + 1) % vertexData.Count].position;
 
-            // Shoelace formula component for XZ plane: (x1*z2 - x2*z1)
+            // Shoelace formula component for the XZ plane: (x1*z2 - x2*z1)
             area += (p1.x * p2.z) - (p2.x * p1.z);
         }
+
         // The sum is twice the signed area.
-        return area / 2.0f;
+        return area * 0.5f;
     }
 
     /// <summary>
-    /// Calculates the signed area of a polygon defined by a list of Vector3 points on the XZ plane.
-    /// A positive area indicates Counter-Clockwise (CCW) vertex order (when viewed from +Y),
-    /// a negative area indicates Clockwise (CW) order.
+    /// Calculates the signed area of a polygon on the XZ plane using the Shoelace formula.
+    /// The sign indicates the winding order: positive for Counter-Clockwise (CCW), negative for Clockwise (CW).
     /// </summary>
-    /// <param name="vertices">List of Vector3 points defining the polygon on the XZ plane.</param>
-    /// <returns>The signed area of the polygon on the XZ plane.</returns>
+    /// <param name="vertices">List of Vector3 points defining the polygon.</param>
+    /// <returns>The signed area of the polygon.</returns>
     public static float CalculateSignedAreaXZ(List<Vector3> vertices)
     {
         if (vertices == null || vertices.Count < 3) return 0f;
@@ -48,53 +54,50 @@ public static class BuildingFootprintUtils
             Vector3 p1 = vertices[i];
             Vector3 p2 = vertices[(i + 1) % vertices.Count];
 
-            // Shoelace formula component for XZ plane: (x1*z2 - x2*z1)
             area += (p1.x * p2.z) - (p2.x * p1.z);
         }
-        // The sum is twice the signed area.
-        return area / 2.0f;
+
+        return area * 0.5f;
     }
 
     /// <summary>
     /// Calculates the outward-facing normal for a side of a polygon on the XZ plane.
-    /// The polygon is defined by PolygonVertexData. Winding order determines "outward".
+    /// The direction of "outward" is determined by the polygon's winding order.
     /// </summary>
-    /// <param name="p1_pos">Position of the start vertex of the side (on XZ plane).</param>
-    /// <param name="p2_pos">Position of the end vertex of the side (on XZ plane).</param>
-    /// <param name="fullFootprintVertexData">The complete list of polygon vertices, used to determine winding order via signed area.</param>
-    /// <returns>The outward-facing normal vector (Vector3 with Y=0).</returns>
+    /// <param name="p1">Position of the side's starting vertex.</param>
+    /// <param name="p2">Position of the side's ending vertex.</param>
+    /// <param name="allVertexData">The complete footprint, used to determine winding order.</param>
+    /// <returns>A normalized Vector3 representing the outward-facing normal on the XZ plane.</returns>
     public static Vector3 CalculateSideNormal(Vector3 p1, Vector3 p2, List<PolygonVertexData> allVertexData)
     {
         Vector3 sideDirection = (p2 - p1);
-        sideDirection.y = 0; // Project onto XZ plane
+        sideDirection.y = 0; // Ensure the vector is flat on the XZ plane.
 
-        if (sideDirection.sqrMagnitude < GeometryConstants.GeometricEpsilon * GeometryConstants.GeometricEpsilon)
+        // If the side has no length, return a default normal.
+        if (sideDirection.sqrMagnitude < GeometryConstants.GeometricEpsilonSqr)
         {
-            // If side length is negligible, default normal (e.g., if p1 and p2 are coincident)
             return Vector3.forward;
         }
-        sideDirection.Normalize();
 
-        // Perpendicular vector on XZ plane (right-hand rule with Y-up gives normal to the right of direction)
-        Vector3 initialNormal = new Vector3(sideDirection.z, 0, -sideDirection.x); // Equivalent to Cross(sideDirection, Vector3.up) and normalizing
+        // Calculate a perpendicular vector. Rotating a 2D vector (x, z) by -90 degrees gives (z, -x).
+        Vector3 initialNormal = new Vector3(sideDirection.z, 0, -sideDirection.x).normalized;
 
+        // The initial normal assumes a CCW winding. If the winding is CW, we must flip it.
         float signedArea = CalculateSignedAreaXZ(allVertexData);
-
-        if (signedArea < -GeometryConstants.GeometricEpsilon) // Clockwise
+        if (signedArea < -GeometryConstants.GeometricEpsilon) // Clockwise winding
         {
             return -initialNormal;
         }
-        else // Counter-Clockwise or zero area
-        {
-            return initialNormal;
-        }
+
+        // Otherwise, assume Counter-Clockwise (or zero area, which is degenerate).
+        return initialNormal;
     }
 
     /// <summary>
-    /// Calculates the geometric center (average of vertex positions) of a polygon footprint.
+    /// Calculates the geometric center (average of all vertex positions) of a polygon footprint.
     /// </summary>
     /// <param name="vertexData">List of PolygonVertexData defining the footprint.</param>
-    /// <returns>The average Vector3 position of the vertices.</returns>
+    /// <returns>The average Vector3 position of all vertices.</returns>
     public static Vector3 CalculatePolygonCentroid(List<PolygonVertexData> vertexData)
     {
         if (vertexData == null || vertexData.Count == 0) return Vector3.zero;
@@ -104,6 +107,7 @@ public static class BuildingFootprintUtils
         {
             center += vd.position;
         }
+
         return center / vertexData.Count;
     }
 }
