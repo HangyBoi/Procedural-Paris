@@ -79,7 +79,7 @@ namespace Adobe.Substance
             public static bool IsHDRP()
             {
 #if UNITY_2019_3_OR_NEWER
-                var asset = GraphicsSettings.renderPipelineAsset?.GetType()?.ToString();
+                var asset = GraphicsSettings.defaultRenderPipeline?.GetType()?.ToString();
 
                 if ((asset != null) && (asset.Contains("HDRenderPipelineAsset")))
                 {
@@ -95,7 +95,7 @@ namespace Adobe.Substance
             public static bool IsURP()
             {
 #if UNITY_2019_3_OR_NEWER
-                var asset = GraphicsSettings.renderPipelineAsset?.GetType()?.ToString();
+                var asset = GraphicsSettings.defaultRenderPipeline?.GetType()?.ToString();
 
                 if ((asset != null) && (asset.Contains("UniversalRenderPipelineAsset") || asset.Contains("LightweightRenderPipelineAsset")))
                 {

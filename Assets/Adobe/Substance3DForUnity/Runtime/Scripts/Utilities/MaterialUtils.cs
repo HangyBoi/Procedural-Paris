@@ -273,8 +273,8 @@ namespace Adobe.Substance
 
         public static Shader GetStandardShader()
         {
-            if (GraphicsSettings.renderPipelineAsset?.defaultMaterial != null)
-                return GraphicsSettings.renderPipelineAsset.defaultMaterial.shader;
+            if (GraphicsSettings.defaultRenderPipeline?.defaultMaterial != null)
+                return GraphicsSettings.defaultRenderPipeline.defaultMaterial.shader;
 
             if (PluginPipelines.IsHDRP())
                 return Shader.Find(HDRPShaderName);
