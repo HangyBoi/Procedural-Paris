@@ -194,6 +194,7 @@ MonoBehaviour:
       - rid: 8241437975269605408
       - rid: 8241437975269605409
       - rid: 8241437975269605410
+      - rid: 5690317420467060736
     m_RuntimeSettings:
       m_List: []
   renderingLayerNames:
@@ -240,6 +241,11 @@ MonoBehaviour:
   references:
     version: 2
     RefIds:
+    - rid: 5690317420467060736
+      type: {class: RenderingDebuggerRuntimeResources, ns: UnityEngine.Rendering,
+        asm: Unity.RenderPipelines.Core.Runtime}
+      data:
+        m_version: 0
     - rid: 8241437975269605376
       type: {class: SpecularFadeSettings, ns: UnityEngine.Rendering.HighDefinition,
         asm: Unity.RenderPipelines.HighDefinition.Runtime}
