@@ -78,19 +78,21 @@ public static class ClipPolygonSutherlandHodgman
             {
                 outputList.Add(e);
             }
+
             // Case 2: Start is inside, end is outside -> add the intersection point.
             else if (s_inside && !e_inside)
             {
                 outputList.Add(CalculateIntersectionPoint(clipEdgeP1, clipEdgeP2, s, e));
             }
+
             // Case 3: Start is outside, end is inside -> add the intersection point, then the end point 'e'.
             else if (!s_inside && e_inside)
             {
                 outputList.Add(CalculateIntersectionPoint(clipEdgeP1, clipEdgeP2, s, e));
                 outputList.Add(e);
             }
-            // Case 4: Both points are outside -> do nothing.
 
+            // Case 4: Both points are outside -> do nothing.
             s = e; // Advance to the next edge.
         }
         return outputList;
